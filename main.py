@@ -66,7 +66,7 @@ class Player(pygame.sprite.Sprite):
         self.glow_time = 0  # For animation effects
         self.facing_right = True  # Track which direction player is facing
         self.last_laser_time = 0  # Cooldown for laser firing
-        self.laser_cooldown = 10  # Frames between laser shots
+        self.laser_cooldown = 30  # Frames between laser shots (0.5 seconds at 60 FPS)
     
     def handle_input(self, keys, mouse_buttons=None):
         if keys[pygame.K_a]:
@@ -131,7 +131,7 @@ class Player(pygame.sprite.Sprite):
             self.vel_y = 0
 
 class Enemy(pygame.sprite.Sprite):
-    def __init__(self, x, y, left_bound, right_bound):
+    def __init__(self, x, y, left_bound, right_bound, can_shoot=False):
         super().__init__()
         self.image = pygame.Surface((35, 35), pygame.SRCALPHA)
         # Cyberpunk enemy: neon magenta with purple glow
@@ -149,11 +149,105 @@ class Enemy(pygame.sprite.Sprite):
         self.vel_x = 2
         self.left_bound = left_bound
         self.right_bound = right_bound
+        self.can_shoot = can_shoot  # Whether this enemy can shoot
+        self.last_shoot_time = 0  # Cooldown for shooting
+        self.shoot_cooldown = 120  # Frames between shots (2 seconds at 60 FPS)
+    
+    def shoot(self):
+        """Return a new enemy laser in a random direction towards player"""
+        self.last_shoot_time = self.shoot_cooldown
+        # Fire towards the player direction (randomly left or right)
+        direction = 1 if self.vel_x > 0 else -1
+        return EnemyLaser(self.rect.centerx, self.rect.centery, direction)
     
     def update(self):
         self.rect.x += self.vel_x
         if self.rect.left <= self.left_bound or self.rect.right >= self.right_bound:
             self.vel_x *= -1
+        
+        # Decrement shoot cooldown
+        if self.last_shoot_time > 0:
+            self.last_shoot_time -= 1
+
+class Boss(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = pygame.Surface((80, 80), pygame.SRCALPHA)
+        # Cyberpunk boss: massive neon pink square with intense glow
+        if USE_CYBERPUNK_THEME:
+            # Main body - neon pink
+            pygame.draw.rect(self.image, NEON_PINK, (10, 10, 60, 60))
+            # Multiple glow borders for intense effect
+            pygame.draw.rect(self.image, NEON_MAGENTA, (10, 10, 60, 60), 3)
+            pygame.draw.rect(self.image, NEON_PURPLE, (5, 5, 70, 70), 2)
+            # Danger indicator X
+            pygame.draw.line(self.image, NEON_CYAN, (20, 20), (60, 60), 2)
+            pygame.draw.line(self.image, NEON_CYAN, (60, 20), (20, 60), 2)
+        else:
+            self.image.fill(PURPLE)
+        
+        self.rect = self.image.get_rect(topleft=(x, y))
+        self.vel_x = 1  # Slower movement than regular enemies
+        self.vel_y = 0
+        self.left_bound = x - 200  # Boss patrol range (narrower)
+        self.right_bound = x + 200
+        self.health = 5  # Boss takes 5 hits to defeat
+        self.last_shoot_time = 0
+        self.shoot_cooldown = 60  # Shoots more frequently (1 second at 60 FPS)
+        self.hit_flash_time = 0  # Frames to flash red after being hit
+        self.hit_flash_duration = 10  # Duration of red flash (10 frames)
+    
+    def take_damage(self):
+        """Called when hit by player laser"""
+        self.health -= 1
+        self.hit_flash_time = self.hit_flash_duration  # Trigger red flash
+        return self.health <= 0  # Return True if boss is defeated
+    
+    def shoot(self):
+        """Return a new enemy laser"""
+        self.last_shoot_time = self.shoot_cooldown
+        direction = 1 if self.vel_x > 0 else -1
+        return EnemyLaser(self.rect.centerx, self.rect.centery, direction)
+    
+    def update(self):
+        # Patrol movement
+        self.rect.x += self.vel_x
+        if self.rect.left <= self.left_bound or self.rect.right >= self.right_bound:
+            self.vel_x *= -1
+        
+        # Decrement shoot cooldown
+        if self.last_shoot_time > 0:
+            self.last_shoot_time -= 1
+        
+        # Decrement hit flash time
+        if self.hit_flash_time > 0:
+            self.hit_flash_time -= 1
+        
+        # Redraw sprite with flash effect if hit
+        self.image = pygame.Surface((80, 80), pygame.SRCALPHA)
+        if self.hit_flash_time > 0:
+            # Flash red when hit
+            if USE_CYBERPUNK_THEME:
+                pygame.draw.rect(self.image, RED, (10, 10, 60, 60))  # Red fill
+                pygame.draw.rect(self.image, (255, 100, 100), (10, 10, 60, 60), 3)  # Light red border
+                pygame.draw.rect(self.image, (255, 150, 150), (5, 5, 70, 70), 2)  # Light red outer
+                pygame.draw.line(self.image, (255, 200, 200), (20, 20), (60, 60), 2)
+                pygame.draw.line(self.image, (255, 200, 200), (60, 20), (20, 60), 2)
+            else:
+                self.image.fill(RED)
+        else:
+            # Normal boss appearance
+            if USE_CYBERPUNK_THEME:
+                # Main body - neon pink
+                pygame.draw.rect(self.image, NEON_PINK, (10, 10, 60, 60))
+                # Multiple glow borders for intense effect
+                pygame.draw.rect(self.image, NEON_MAGENTA, (10, 10, 60, 60), 3)
+                pygame.draw.rect(self.image, NEON_PURPLE, (5, 5, 70, 70), 2)
+                # Danger indicator X
+                pygame.draw.line(self.image, NEON_CYAN, (20, 20), (60, 60), 2)
+                pygame.draw.line(self.image, NEON_CYAN, (60, 20), (20, 60), 2)
+            else:
+                self.image.fill(PURPLE)
 
 class Collectible(pygame.sprite.Sprite):
     def __init__(self, x, y):
@@ -201,7 +295,32 @@ class Laser(pygame.sprite.Sprite):
         self.rect.x += self.speed * self.direction
         
         # Remove laser if it goes off screen or past level end
-        if self.rect.right < 0 or self.rect.left > 5000:  # Allow laser to travel full level width
+        if self.rect.right < 0 or self.rect.left > 7000:  # Allow laser to travel full level width (supports up to 7000px)
+            self.kill()
+
+class EnemyLaser(pygame.sprite.Sprite):
+    def __init__(self, x, y, direction=1):
+        super().__init__()
+        self.speed = 8  # Enemy laser speed (slower than player laser)
+        self.direction = direction  # 1 for right, -1 for left
+        
+        # Create enemy laser visual (red instead of green)
+        self.image = pygame.Surface((20, 5), pygame.SRCALPHA)
+        if USE_CYBERPUNK_THEME:
+            # Neon red laser beam with glow
+            pygame.draw.rect(self.image, (255, 50, 50), (0, 0, 20, 5))  # Red color
+            pygame.draw.rect(self.image, (255, 150, 150), (0, 0, 20, 5), 1)  # Light red glow border
+        else:
+            self.image.fill((200, 0, 0))  # Dark red
+        
+        self.rect = self.image.get_rect(center=(x, y))
+    
+    def update(self):
+        # Move laser in the direction it was fired
+        self.rect.x += self.speed * self.direction
+        
+        # Remove laser if it goes off screen
+        if self.rect.right < 0 or self.rect.left > SCREEN_WIDTH + 500:
             self.kill()
 
 class Platform(pygame.sprite.Sprite):
@@ -264,6 +383,8 @@ class Game:
         self.enemies = pygame.sprite.Group()
         self.collectibles = pygame.sprite.Group()
         self.lasers = pygame.sprite.Group()  # NEW: Laser group
+        self.enemy_lasers = pygame.sprite.Group()  # NEW: Enemy laser group
+        self.bosses = pygame.sprite.Group()  # NEW: Boss group
         self.all_sprites = pygame.sprite.Group()
         
         # Create level
@@ -278,6 +399,8 @@ class Game:
             self.create_level_1()
         elif self.level == 2:
             self.create_level_2()
+        elif self.level == 3:
+            self.create_level_3()
     
     def create_level_1(self):
         # Ground - extended length
@@ -308,25 +431,26 @@ class Game:
             self.platforms.add(platform)
             self.all_sprites.add(platform)
         
-        # Extended enemies
+        # Extended enemies (some can shoot)
+        # Position enemies on platforms (platform_y - 35 to sit on top)
         enemies_data = [
-            (275, 430, 200, 350),
-            (575, 380, 500, 650),
-            (375, 280, 300, 450),
-            (675, 230, 600, 750),
-            (975, 330, 900, 1050),
-            (1275, 280, 1200, 1350),
-            (1575, 230, 1500, 1650),
-            (1875, 330, 1800, 1950),
-            (2175, 280, 2100, 2250),
-            (2475, 230, 2400, 2550),
-            (2775, 330, 2700, 2850),
-            (3075, 280, 3000, 3150),
-            (3375, 230, 3300, 3450),
+            (275, 415, 200, 350, False),   # On platform at y=450
+            (575, 365, 500, 650, True),    # On platform at y=400
+            (375, 265, 300, 450, False),   # On platform at y=300
+            (675, 215, 600, 750, True),    # On platform at y=250
+            (975, 315, 900, 1050, False),  # On platform at y=350
+            (1275, 265, 1200, 1350, True), # On platform at y=300
+            (1575, 215, 1500, 1650, False),# On platform at y=250
+            (1875, 315, 1800, 1950, True), # On platform at y=350
+            (2175, 265, 2100, 2250, False),# On platform at y=300
+            (2475, 215, 2400, 2550, True), # On platform at y=250
+            (2775, 315, 2700, 2850, False),# On platform at y=350
+            (3075, 265, 3000, 3150, True), # On platform at y=300
+            (3375, 215, 3300, 3450, False),# On platform at y=250
         ]
         
-        for x, y, left, right in enemies_data:
-            enemy = Enemy(x, y, left, right)
+        for x, y, left, right, can_shoot in enemies_data:
+            enemy = Enemy(x, y, left, right, can_shoot)
             self.enemies.add(enemy)
             self.all_sprites.add(enemy)
         
@@ -383,39 +507,39 @@ class Game:
             self.platforms.add(platform)
             self.all_sprites.add(platform)
         
-        # More enemies
+        # More enemies (some can shoot)
+        # Position enemies on platforms (platform_y - 35 to sit on top)
         enemies_data = [
-            (250, 430, 200, 300),
-            (400, 380, 350, 450),
-            (550, 330, 500, 600),
-            (700, 280, 650, 750),
-            (850, 330, 800, 900),
-            (1000, 360, 950, 1050),
-            (1150, 300, 1100, 1200),
-            (1300, 340, 1250, 1350),
-            (1450, 280, 1400, 1500),
-            (1600, 320, 1550, 1650),
-            (1750, 360, 1700, 1800),
-            (1900, 300, 1850, 1950),
-            (2050, 330, 2000, 2100),
-            (2200, 390, 2150, 2250),
-            (2350, 320, 2300, 2400),
-            (2500, 280, 2450, 2550),
-            (2650, 350, 2600, 2700),
-            (2800, 300, 2750, 2850),
-            (2950, 360, 2900, 3000),
-            # Added enemies for more challenge
-            (3100, 340, 3050, 3150),
-            (3250, 300, 3200, 3300),
-            (3400, 360, 3350, 3450),
-            (3550, 320, 3500, 3600),
-            (3700, 380, 3650, 3750),
-            (3850, 310, 3800, 3900),
-            (3950, 350, 3900, 4000),
+            (250, 415, 200, 300, True),    # On platform at y=450, can shoot
+            (400, 365, 350, 450, False),   # On platform at y=400
+            (550, 315, 500, 600, True),    # On platform at y=350, can shoot
+            (700, 265, 650, 750, False),   # On platform at y=300
+            (850, 365, 800, 900, True),    # On platform at y=400, can shoot
+            (1000, 315, 950, 1050, False), # On platform at y=350
+            (1150, 265, 1100, 1200, True), # On platform at y=300, can shoot
+            (1300, 345, 1250, 1350, False),# On platform at y=380
+            (1450, 285, 1400, 1500, True), # On platform at y=320, can shoot
+            (1600, 245, 1550, 1650, False),# On platform at y=280
+            (1750, 325, 1700, 1800, True), # On platform at y=360, can shoot
+            (1900, 265, 1850, 1950, False),# On platform at y=300
+            (2050, 215, 2000, 2100, True), # On platform at y=250, can shoot
+            (2200, 305, 2150, 2250, False),# On platform at y=340
+            (2350, 255, 2300, 2400, True), # On platform at y=290, can shoot
+            (2500, 315, 2450, 2550, False),# On platform at y=350
+            (2650, 265, 2600, 2700, True), # On platform at y=300, can shoot
+            (2800, 225, 2750, 2850, False),# On platform at y=260
+            (2950, 285, 2900, 3000, True), # On platform at y=320, can shoot
+            (3100, 345, 3050, 3150, False),# On platform at y=380
+            (3250, 275, 3200, 3300, True), # On platform at y=310, can shoot
+            (3400, 235, 3350, 3450, False),# On platform at y=270
+            (3550, 305, 3500, 3600, True), # On platform at y=340, can shoot
+            (3700, 255, 3650, 3750, False),# On platform at y=290
+            (3850, 315, 3800, 3900, True), # On platform at y=350, can shoot
+            (3950, 265, 3900, 4000, False),# On platform at y=300
         ]
         
-        for x, y, left, right in enemies_data:
-            enemy = Enemy(x, y, left, right)
+        for x, y, left, right, can_shoot in enemies_data:
+            enemy = Enemy(x, y, left, right, can_shoot)
             self.enemies.add(enemy)
             self.all_sprites.add(enemy)
         
@@ -428,6 +552,80 @@ class Game:
             (2600, 290), (2750, 250), (2900, 310), (3050, 370),
             (3200, 300), (3350, 260), (3500, 330), (3650, 280),
             (3800, 340), (3950, 290)
+        ]
+        for cx, cy in collectibles_data:
+            collectible = Collectible(cx, cy)
+            self.collectibles.add(collectible)
+            self.all_sprites.add(collectible)
+    
+    def create_level_3(self):
+        """Final boss level - shorter but with intense boss challenge"""
+        # Ground
+        ground = Platform(0, SCREEN_HEIGHT - 40, 7000, 40)
+        self.platforms.add(ground)
+        self.all_sprites.add(ground)
+        
+        # Boss arena platforms - fewer but taller for tactical movement
+        platforms_data = [
+            (200, 450, 150, 20),
+            (450, 350, 150, 20),
+            (700, 250, 150, 20),
+            (950, 350, 150, 20),
+            (1200, 200, 150, 20),
+            (1500, 350, 150, 20),
+            (1800, 250, 150, 20),
+            (2100, 400, 150, 20),
+            (2400, 300, 150, 20),
+            (2700, 200, 150, 20),
+            (3000, 350, 150, 20),
+            (3300, 250, 150, 20),
+            (3600, 400, 150, 20),
+            (3900, 300, 150, 20),
+            (4200, 150, 150, 20),  # Challenging access to boss
+            (4500, 300, 150, 20),
+            (4800, 200, 150, 20),
+            (5100, 350, 150, 20),
+            (5400, 300, 150, 20),
+            (5700, 200, 150, 20),
+            (5900, 450, 300, 20),  # Wide platform for boss battle
+        ]
+        
+        for x, y, w, h in platforms_data:
+            platform = Platform(x, y, w, h)
+            self.platforms.add(platform)
+            self.all_sprites.add(platform)
+        
+        # Fewer enemies before boss
+        enemies_data = [
+            (275, 415, 200, 350, False),   # On platform at y=450
+            (525, 315, 450, 600, True),    # On platform at y=350
+            (775, 215, 700, 850, False),   # On platform at y=250
+            (1025, 315, 950, 1100, True),  # On platform at y=350
+            (1275, 165, 1200, 1350, False),# On platform at y=200
+            (1575, 315, 1500, 1650, True), # On platform at y=350
+            (1875, 215, 1800, 1950, False),# On platform at y=250
+            (2175, 365, 2100, 2250, True), # On platform at y=400
+            (2475, 265, 2400, 2550, False),# On platform at y=300
+            (2775, 165, 2700, 2850, True), # On platform at y=200
+        ]
+        
+        for x, y, left, right, can_shoot in enemies_data:
+            enemy = Enemy(x, y, left, right, can_shoot)
+            self.enemies.add(enemy)
+            self.all_sprites.add(enemy)
+        
+        # Boss at the end (on the wide platform)
+        boss = Boss(5950, 370)  # 370 = 450 - 80 (platform_y - boss_height)
+        self.bosses.add(boss)
+        self.all_sprites.add(boss)
+        
+        # Fewer collectibles, more spread out
+        collectibles_data = [
+            (200, 430), (450, 330), (700, 230), (950, 330),
+            (1200, 180), (1500, 330), (1800, 230), (2100, 380),
+            (2400, 280), (2700, 180), (3000, 330), (3300, 230),
+            (3600, 380), (3900, 280), (4200, 130), (4500, 280),
+            (4800, 180), (5100, 330), (5400, 280), (5700, 180)
         ]
         for cx, cy in collectibles_data:
             collectible = Collectible(cx, cy)
@@ -450,6 +648,8 @@ class Game:
         self.enemies.empty()
         self.collectibles.empty()
         self.lasers.empty()  # Clear lasers
+        self.enemy_lasers.empty()  # Clear enemy lasers
+        self.bosses.empty()  # Clear bosses
         self.all_sprites.empty()
         
         # Move to next level
@@ -476,15 +676,43 @@ class Game:
         
         self.player.update(self.platforms)
         self.enemies.update()
+        
+        # Handle enemy shooting
+        import random
+        for enemy in self.enemies:
+            if enemy.can_shoot and enemy.last_shoot_time <= 0:
+                # Randomly decide if enemy shoots this frame (~0.8% chance per frame)
+                if random.random() < 0.008:
+                    new_enemy_laser = enemy.shoot()
+                    self.enemy_lasers.add(new_enemy_laser)
+                    self.all_sprites.add(new_enemy_laser)
+        
+        # Handle boss shooting (more aggressive)
+        for boss in self.bosses:
+            if boss.last_shoot_time <= 0:
+                # Boss shoots more frequently (~3% chance per frame)
+                if random.random() < 0.03:
+                    new_boss_laser = boss.shoot()
+                    self.enemy_lasers.add(new_boss_laser)
+                    self.all_sprites.add(new_boss_laser)
+        
         self.collectibles.update()  # Update collectible animations
         self.lasers.update()  # Update lasers
+        self.enemy_lasers.update()  # Update enemy lasers
+        self.bosses.update()  # Update bosses
         self.update_camera()
         self.frame_count += 1  # Increment frame counter for effects
         
-        # Check if player reached end of level
-        level_end_x = 4000 if self.level == 1 else 5000
-        if self.player.rect.x > level_end_x - 50:
-            self.load_next_level()
+        # Check if player reached end of level (or defeated boss)
+        if self.level == 3:
+            # Level 3: Check if boss is defeated
+            if len(self.bosses) == 0:
+                self.load_next_level()
+        else:
+            # Levels 1-2: Check if player reached end
+            level_end_x = 4000 if self.level == 1 else 5000
+            if self.player.rect.x > level_end_x - 50:
+                self.load_next_level()
         
         # Collect items
         collected = pygame.sprite.spritecollide(self.player, self.collectibles, True)
@@ -497,6 +725,25 @@ class Game:
                 enemy.kill()
                 laser.kill()
                 self.score += 50  # Score for laser kill
+            
+            # Laser collisions with boss
+            bosses_hit = pygame.sprite.spritecollide(laser, self.bosses, False)
+            for boss in bosses_hit:
+                laser.kill()
+                if boss.take_damage():
+                    # Boss defeated
+                    boss.kill()
+                    self.score += 500  # Massive score for defeating boss
+                else:
+                    self.score += 100  # Score for each hit on boss
+        
+        # Enemy laser collisions with player - damage
+        enemy_lasers_hit = pygame.sprite.spritecollide(self.player, self.enemy_lasers, True)
+        if enemy_lasers_hit:
+            # Player hit by enemy laser - reset
+            self.player.rect.topleft = (100, 100)
+            self.camera_x = 0
+            self.score = 0
         
         # Enemy collision - kill by jumping on them or with lasers
         enemies_hit = pygame.sprite.spritecollide(self.player, self.enemies, False)
@@ -511,6 +758,14 @@ class Game:
                 self.player.rect.topleft = (100, 100)
                 self.camera_x = 0
                 self.score = 0
+        
+        # Boss collision - cannot be jumped on, touching boss resets player
+        bosses_hit = pygame.sprite.spritecollide(self.player, self.bosses, False)
+        if bosses_hit:
+            # Player hit boss - reset
+            self.player.rect.topleft = (100, 100)
+            self.camera_x = 0
+            self.score = 0
     
     def draw_grid_background(self):
         """Draw animated grid background for cyberpunk theme"""
@@ -602,6 +857,57 @@ class Game:
             level_text = self.font_medium.render(f"Level: {self.level}", True, BLACK)
             self.screen.blit(score_text, (10, 10))
             self.screen.blit(level_text, (10, 50))
+        
+        # Draw boss health bar if boss exists
+        if len(self.bosses) > 0:
+            boss = list(self.bosses)[0]  # Get the first (and only) boss
+            
+            # Health bar positioning
+            bar_x = SCREEN_WIDTH // 2 - 100
+            bar_y = 20
+            bar_width = 200
+            bar_height = 30
+            
+            # Calculate health percentage
+            health_percentage = boss.health / 5.0  # Boss has 5 max health
+            
+            if USE_CYBERPUNK_THEME:
+                # Background panel
+                pygame.draw.rect(self.screen, (50, 0, 0), (bar_x - 5, bar_y - 5, bar_width + 10, bar_height + 10))
+                pygame.draw.rect(self.screen, NEON_MAGENTA, (bar_x - 5, bar_y - 5, bar_width + 10, bar_height + 10), 2)
+                
+                # Boss name
+                boss_text = self.font_small.render("BOSS HEALTH", True, NEON_MAGENTA)
+                self.screen.blit(boss_text, (bar_x, bar_y - 25))
+                
+                # Health bar background
+                pygame.draw.rect(self.screen, (30, 0, 0), (bar_x, bar_y, bar_width, bar_height))
+                
+                # Health bar fill (red to green gradient based on health)
+                if health_percentage > 0.5:
+                    bar_color = (int(255 * (1 - health_percentage)), 255, 0)  # Green to yellow
+                elif health_percentage > 0.25:
+                    bar_color = (255, 200, 0)  # Yellow
+                else:
+                    bar_color = (255, 0, 0)  # Red
+                
+                pygame.draw.rect(self.screen, bar_color, (bar_x, bar_y, int(bar_width * health_percentage), bar_height))
+                
+                # Health bar border
+                pygame.draw.rect(self.screen, NEON_MAGENTA, (bar_x, bar_y, bar_width, bar_height), 2)
+                
+                # Health text
+                health_text = self.font_small.render(f"{boss.health}/5", True, bar_color)
+                health_rect = health_text.get_rect(center=(bar_x + bar_width // 2, bar_y + bar_height // 2))
+                self.screen.blit(health_text, health_rect)
+            else:
+                # Classic mode
+                pygame.draw.rect(self.screen, BLACK, (bar_x, bar_y, bar_width, bar_height))
+                pygame.draw.rect(self.screen, RED, (bar_x, bar_y, int(bar_width * health_percentage), bar_height))
+                pygame.draw.rect(self.screen, BLACK, (bar_x, bar_y, bar_width, bar_height), 2)
+                
+                health_text = self.font_small.render(f"Boss: {boss.health}/5", True, BLACK)
+                self.screen.blit(health_text, (bar_x, bar_y - 20))
         
         pygame.display.flip()
     
