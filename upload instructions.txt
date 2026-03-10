@@ -1,0 +1,6 @@
+first do 
+    git add *
+next
+    git commit -m "upload message"
+then
+    git push

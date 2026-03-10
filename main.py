@@ -32,7 +32,7 @@ GLOW_INTENSITY = 2             # For multiple glow layers
 SCANLINE_ALPHA = 15            # Subtle scanlines
 
 # Theme toggle flag
-USE_CYBERPUNK_THEME = True
+USE_CYBERPUNK_THEME = False
 
 # Legacy colors (for reference/fallback)
 WHITE = (255, 255, 255)
@@ -64,18 +64,31 @@ class Player(pygame.sprite.Sprite):
         self.vel_x = 0
         self.is_jumping = False
         self.glow_time = 0  # For animation effects
+        self.facing_right = True  # Track which direction player is facing
+        self.last_laser_time = 0  # Cooldown for laser firing
+        self.laser_cooldown = 10  # Frames between laser shots
     
-    def handle_input(self, keys):
-        if keys[pygame.K_LEFT]:
+    def handle_input(self, keys, mouse_buttons=None):
+        if keys[pygame.K_a]:
             self.vel_x = -PLAYER_SPEED
-        elif keys[pygame.K_RIGHT]:
+            self.facing_right = False
+        elif keys[pygame.K_d]:
             self.vel_x = PLAYER_SPEED
+            self.facing_right = True
         else:
             self.vel_x = 0
         
+        # Jump with spacebar
         if keys[pygame.K_SPACE] and not self.is_jumping:
             self.vel_y = -JUMP_STRENGTH
             self.is_jumping = True
+    
+    def fire_laser(self):
+        """Return a new laser in the direction the player is facing"""
+        self.last_laser_time = self.laser_cooldown
+        # Fire from the center of the player
+        direction = 1 if self.facing_right else -1
+        return Laser(self.rect.centerx, self.rect.centery, direction)
     
     def apply_gravity(self):
         self.vel_y += GRAVITY
@@ -85,6 +98,10 @@ class Player(pygame.sprite.Sprite):
     def update(self, platforms):
         self.apply_gravity()
         self.glow_time += 1  # Increment glow animation
+        
+        # Decrement laser cooldown
+        if self.last_laser_time > 0:
+            self.last_laser_time -= 1
         
         # Move horizontally first and check collisions
         self.rect.x += self.vel_x
@@ -162,6 +179,31 @@ class Collectible(pygame.sprite.Sprite):
         self.bob_offset = math.sin(pygame.time.get_ticks() * 0.003) * 3
         self.rect.y = self.original_y + self.bob_offset
 
+class Laser(pygame.sprite.Sprite):
+    def __init__(self, x, y, direction=1):
+        super().__init__()
+        self.speed = 12  # Laser speed
+        self.direction = direction  # 1 for right, -1 for left
+        
+        # Create laser visual
+        self.image = pygame.Surface((20, 5), pygame.SRCALPHA)
+        if USE_CYBERPUNK_THEME:
+            # Neon green laser beam with glow
+            pygame.draw.rect(self.image, NEON_GREEN, (0, 0, 20, 5))
+            pygame.draw.rect(self.image, NEON_CYAN, (0, 0, 20, 5), 1)  # Glow border
+        else:
+            self.image.fill(YELLOW)
+        
+        self.rect = self.image.get_rect(center=(x, y))
+    
+    def update(self):
+        # Move laser in the direction it was fired
+        self.rect.x += self.speed * self.direction
+        
+        # Remove laser if it goes off screen or past level end
+        if self.rect.right < 0 or self.rect.left > 5000:  # Allow laser to travel full level width
+            self.kill()
+
 class Platform(pygame.sprite.Sprite):
     def __init__(self, x, y, width, height, color=None):
         super().__init__()
@@ -221,6 +263,7 @@ class Game:
         self.platforms = pygame.sprite.Group()
         self.enemies = pygame.sprite.Group()
         self.collectibles = pygame.sprite.Group()
+        self.lasers = pygame.sprite.Group()  # NEW: Laser group
         self.all_sprites = pygame.sprite.Group()
         
         # Create level
@@ -361,6 +404,14 @@ class Game:
             (2650, 350, 2600, 2700),
             (2800, 300, 2750, 2850),
             (2950, 360, 2900, 3000),
+            # Added enemies for more challenge
+            (3100, 340, 3050, 3150),
+            (3250, 300, 3200, 3300),
+            (3400, 360, 3350, 3450),
+            (3550, 320, 3500, 3600),
+            (3700, 380, 3650, 3750),
+            (3850, 310, 3800, 3900),
+            (3950, 350, 3900, 4000),
         ]
         
         for x, y, left, right in enemies_data:
@@ -384,8 +435,8 @@ class Game:
             self.all_sprites.add(collectible)
     
     def update_camera(self):
-        # Camera follows player, keeps player centered
-        self.camera_x = self.player.rect.centerx - SCREEN_WIDTH // 3
+        # Camera follows player, keeps player centered in middle of screen
+        self.camera_x = self.player.rect.centerx - SCREEN_WIDTH // 2
         self.camera_x = max(0, self.camera_x)
     
     def handle_events(self):
@@ -398,6 +449,7 @@ class Game:
         self.platforms.empty()
         self.enemies.empty()
         self.collectibles.empty()
+        self.lasers.empty()  # Clear lasers
         self.all_sprites.empty()
         
         # Move to next level
@@ -413,10 +465,19 @@ class Game:
     
     def update(self):
         keys = pygame.key.get_pressed()
-        self.player.handle_input(keys)
+        mouse_buttons = pygame.mouse.get_pressed()
+        self.player.handle_input(keys, mouse_buttons)
+        
+        # Handle laser firing with left mouse click
+        if mouse_buttons[0] and self.player.last_laser_time <= 0:  # Left mouse button (index 0)
+            new_laser = self.player.fire_laser()
+            self.lasers.add(new_laser)
+            self.all_sprites.add(new_laser)
+        
         self.player.update(self.platforms)
         self.enemies.update()
         self.collectibles.update()  # Update collectible animations
+        self.lasers.update()  # Update lasers
         self.update_camera()
         self.frame_count += 1  # Increment frame counter for effects
         
@@ -429,7 +490,15 @@ class Game:
         collected = pygame.sprite.spritecollide(self.player, self.collectibles, True)
         self.score += len(collected) * 10
         
-        # Enemy collision - kill by jumping on them
+        # Laser collisions with enemies
+        for laser in self.lasers:
+            enemies_hit = pygame.sprite.spritecollide(laser, self.enemies, False)
+            for enemy in enemies_hit:
+                enemy.kill()
+                laser.kill()
+                self.score += 50  # Score for laser kill
+        
+        # Enemy collision - kill by jumping on them or with lasers
         enemies_hit = pygame.sprite.spritecollide(self.player, self.enemies, False)
         for enemy in enemies_hit:
             if self.player.vel_y > 0 and self.player.rect.bottom - self.player.vel_y <= enemy.rect.centery:
