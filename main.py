@@ -204,10 +204,10 @@ class Boss(pygame.sprite.Sprite):
         return self.health <= 0  # Return True if boss is defeated
     
     def shoot(self):
-        """Return a new enemy laser"""
+        """Return a new boss laser (special variant)"""
         self.last_shoot_time = self.shoot_cooldown
         direction = 1 if self.vel_x > 0 else -1
-        return EnemyLaser(self.rect.centerx, self.rect.centery, direction)
+        return BossLaser(self.rect.centerx, self.rect.centery, direction)
     
     def update(self):
         # Patrol movement
@@ -312,6 +312,32 @@ class EnemyLaser(pygame.sprite.Sprite):
             pygame.draw.rect(self.image, (255, 150, 150), (0, 0, 20, 5), 1)  # Light red glow border
         else:
             self.image.fill((200, 0, 0))  # Dark red
+        
+        self.rect = self.image.get_rect(center=(x, y))
+    
+    def update(self):
+        # Move laser in the direction it was fired
+        self.rect.x += self.speed * self.direction
+        
+        # Remove laser if it goes off screen
+        if self.rect.right < 0 or self.rect.left > SCREEN_WIDTH + 500:
+            self.kill()
+
+class BossLaser(pygame.sprite.Sprite):
+    def __init__(self, x, y, direction=1):
+        super().__init__()
+        self.speed = 7  # Boss laser speed (slower than regular enemy laser)
+        self.direction = direction  # 1 for right, -1 for left
+        
+        # Create boss laser visual (massive neon pink laser)
+        self.image = pygame.Surface((25, 8), pygame.SRCALPHA)
+        if USE_CYBERPUNK_THEME:
+            # Massive neon pink laser beam with intense glow
+            pygame.draw.rect(self.image, NEON_PINK, (0, 0, 25, 8))  # Pink color
+            pygame.draw.rect(self.image, NEON_MAGENTA, (0, 0, 25, 8), 2)  # Magenta glow border
+            pygame.draw.rect(self.image, (255, 100, 200), (0, 0, 25, 8), 1)  # Extra glow
+        else:
+            self.image.fill((255, 100, 100))  # Light red
         
         self.rect = self.image.get_rect(center=(x, y))
     
