@@ -46,9 +46,48 @@ PURPLE = (200, 0, 200)
 class Player(pygame.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__()
-        self.image = pygame.Surface((40, 60), pygame.SRCALPHA)
-        # Cyberpunk player: neon cyan core with magenta outline
+        self.image = pygame.Surface((60, 80), pygame.SRCALPHA)
         if USE_CYBERPUNK_THEME:
+            # Head/Helmet (red visor)
+            pygame.draw.rect(self.image, (100, 100, 150), (18, 8, 24, 16))  # Helmet base
+            pygame.draw.rect(self.image, (200, 50, 50), (22, 10, 16, 8))     # Red visor
+            pygame.draw.line(self.image, (150, 150, 200), (18, 8), (42, 8), 1)  # Top highlight
+            
+            # Shoulders
+            pygame.draw.rect(self.image, (120, 120, 160), (10, 20, 10, 8))   # Left shoulder
+            pygame.draw.rect(self.image, (120, 120, 160), (40, 20, 10, 8))   # Right shoulder
+            
+            # Chest/Body (tan/gold color with cyan accents)
+            pygame.draw.rect(self.image, (180, 150, 100), (16, 24, 28, 20))  # Main chest
+            pygame.draw.rect(self.image, (100, 180, 200), (18, 26, 24, 4))   # Cyan chest stripe
+            pygame.draw.rect(self.image, (100, 100, 150), (16, 24, 28, 20), 2)  # Dark outline
+            
+            # Arms
+            pygame.draw.rect(self.image, (120, 120, 160), (6, 28, 8, 18))    # Left arm
+            pygame.draw.rect(self.image, (120, 120, 160), (46, 28, 8, 18))   # Right arm
+            pygame.draw.rect(self.image, (80, 80, 100), (6, 28, 8, 18), 1)   # Arm outline
+            pygame.draw.rect(self.image, (80, 80, 100), (46, 28, 8, 18), 1)  # Arm outline
+            
+            # Gloves/Fists
+            pygame.draw.rect(self.image, (60, 60, 80), (4, 46, 12, 8))       # Left fist
+            pygame.draw.rect(self.image, (60, 60, 80), (44, 46, 12, 8))      # Right fist
+            
+            # Waist belt
+            pygame.draw.rect(self.image, (200, 180, 100), (14, 42, 32, 4))   # Gold belt
+            
+            # Legs
+            pygame.draw.rect(self.image, (120, 120, 160), (18, 48, 10, 20))  # Left leg
+            pygame.draw.rect(self.image, (120, 120, 160), (32, 48, 10, 20))  # Right leg
+            pygame.draw.rect(self.image, (80, 80, 100), (18, 48, 10, 20), 1) # Left leg outline
+            pygame.draw.rect(self.image, (80, 80, 100), (32, 48, 10, 20), 1) # Right leg outline
+            
+            # Feet/Boots
+            pygame.draw.rect(self.image, (80, 80, 100), (16, 68, 14, 8))     # Left boot
+            pygame.draw.rect(self.image, (80, 80, 100), (30, 68, 14, 8))     # Right boot
+            
+            # Details - cyan shoulder missiles/vents
+            pygame.draw.circle(self.image, (100, 180, 200), (15, 18), 3)     # Left shoulder vent
+            pygame.draw.circle(self.image, (100, 180, 200), (45, 18), 3)     # Right shoulder vent
             # Draw main body with cyan
             pygame.draw.rect(self.image, NEON_CYAN, (10, 10, 20, 40))
             # Add magenta border for glow effect
@@ -67,6 +106,12 @@ class Player(pygame.sprite.Sprite):
         self.facing_right = True  # Track which direction player is facing
         self.last_laser_time = 0  # Cooldown for laser firing
         self.laser_cooldown = 30  # Frames between laser shots (0.5 seconds at 60 FPS)
+        self.shooting_anim_time = 0  # Animation counter for shooting pose
+        self.shooting_anim_duration = 8  # Frames to show shooting animation
+        # Walking animation
+        self.walking_frame = 0  # Current frame of walk cycle (0 or 1)
+        self.walk_anim_counter = 0  # Counter for walk animation timing
+        self.walk_frame_duration = 10  # Frames per step (0.167 seconds at 60 FPS)
     
     def handle_input(self, keys, mouse_buttons=None):
         if keys[pygame.K_a]:
@@ -86,6 +131,11 @@ class Player(pygame.sprite.Sprite):
     def fire_laser(self):
         """Return a new laser in the direction the player is facing"""
         self.last_laser_time = self.laser_cooldown
+        self.shooting_anim_time = self.shooting_anim_duration  # Trigger shooting animation
+        # Walking animation
+        self.walking_frame = 0  # Current frame of walk cycle (0 or 1)
+        self.walk_anim_counter = 0  # Counter for walk animation timing
+        self.walk_frame_duration = 10  # Frames per step (0.167 seconds at 60 FPS)
         # Fire from the center of the player
         direction = 1 if self.facing_right else -1
         return Laser(self.rect.centerx, self.rect.centery, direction)
@@ -102,6 +152,10 @@ class Player(pygame.sprite.Sprite):
         # Decrement laser cooldown
         if self.last_laser_time > 0:
             self.last_laser_time -= 1
+
+        # Decrement shooting animation counter
+        if self.shooting_anim_time > 0:
+            self.shooting_anim_time -= 1
         
         # Move horizontally first and check collisions
         self.rect.x += self.vel_x
@@ -130,7 +184,131 @@ class Player(pygame.sprite.Sprite):
             self.rect.topleft = (100, 100)
             self.vel_y = 0
 
-class Enemy(pygame.sprite.Sprite):
+        # Update walking animation
+        if abs(self.vel_x) > 0:
+            self.walk_anim_counter += 1
+            if self.walk_anim_counter >= self.walk_frame_duration:
+                self.walk_anim_counter = 0
+                self.walking_frame = 1 - self.walking_frame  # Toggle between 0 and 1
+        else:
+            self.walk_anim_counter = 0  # Reset when not moving
+            self.shooting_anim_time -= 1
+        
+        # Move horizontally first and check collisions
+        self.rect.x += self.vel_x
+        for platform in platforms:
+            if self.rect.colliderect(platform.rect):
+                if self.vel_x > 0:
+                    self.rect.right = platform.rect.left
+                elif self.vel_x < 0:
+                    self.rect.left = platform.rect.right
+        
+        # Move vertically and check collisions
+        self.rect.y += self.vel_y
+        self.is_jumping = True
+        for platform in platforms:
+            if self.rect.colliderect(platform.rect):
+                if self.vel_y > 0:
+                    self.rect.bottom = platform.rect.top
+                    self.vel_y = 0
+                    self.is_jumping = False
+                elif self.vel_y < 0:
+                    self.rect.top = platform.rect.bottom
+                    self.vel_y = 0
+        
+        # Fall off screen
+        if self.rect.top > SCREEN_HEIGHT:
+            self.rect.topleft = (100, 100)
+            self.vel_y = 0
+
+    def redraw(self):
+        """Redraw the player sprite with walking and shooting animations"""
+        self.image = pygame.Surface((60, 80), pygame.SRCALPHA)
+        
+        # Draw base player sprite
+        def draw_base_player():
+            # Head/Helmet (red visor)
+            pygame.draw.rect(self.image, (100, 100, 150), (18, 8, 24, 16))
+            pygame.draw.rect(self.image, (200, 50, 50), (22, 10, 16, 8))
+            pygame.draw.line(self.image, (150, 150, 200), (18, 8), (42, 8), 1)
+            
+            # Shoulders
+            pygame.draw.rect(self.image, (120, 120, 160), (10, 20, 10, 8))
+            pygame.draw.rect(self.image, (120, 120, 160), (40, 20, 10, 8))
+            
+            # Chest/Body
+            pygame.draw.rect(self.image, (180, 150, 100), (16, 24, 28, 20))
+            pygame.draw.rect(self.image, (100, 180, 200), (18, 26, 24, 4))
+            pygame.draw.rect(self.image, (100, 100, 150), (16, 24, 28, 20), 2)
+            
+            # Waist belt
+            pygame.draw.rect(self.image, (200, 180, 100), (14, 42, 32, 4))
+            
+            # Shoulder vents
+            pygame.draw.circle(self.image, (100, 180, 200), (15, 18), 3)
+            pygame.draw.circle(self.image, (100, 180, 200), (45, 18), 3)
+        
+        if USE_CYBERPUNK_THEME:
+            draw_base_player()
+            
+            if self.shooting_anim_time > 0:
+                # Shooting pose: extended arm with weapon effect
+                pygame.draw.rect(self.image, (120, 120, 160), (6, 28, 12, 18))  # Extended left arm
+                pygame.draw.rect(self.image, (200, 100, 50), (6, 32, 14, 4))    # Weapon barrel
+                pygame.draw.rect(self.image, (80, 80, 100), (6, 28, 12, 18), 1)
+                
+                # Right arm at side
+                pygame.draw.rect(self.image, (120, 120, 160), (46, 28, 8, 18))
+                
+                # Bright glow effect
+                pygame.draw.circle(self.image, (100, 200, 255), (15, 32), 4)
+            elif abs(self.vel_x) > 0:
+                # Walking pose - legs in stride
+                # Arms swing opposite to legs
+                if self.walking_frame == 0:
+                    # Left leg forward, right arm forward
+                    pygame.draw.rect(self.image, (120, 120, 160), (6, 26, 10, 20))   # Left arm forward
+                    pygame.draw.rect(self.image, (120, 120, 160), (46, 32, 8, 14))   # Right arm back
+                    pygame.draw.rect(self.image, (120, 120, 160), (18, 46, 10, 22))  # Left leg forward
+                    pygame.draw.rect(self.image, (120, 120, 160), (32, 48, 10, 20))  # Right leg back
+                else:
+                    # Right leg forward, left arm forward
+                    pygame.draw.rect(self.image, (120, 120, 160), (6, 32, 8, 14))    # Left arm back
+                    pygame.draw.rect(self.image, (120, 120, 160), (46, 26, 10, 20))  # Right arm forward
+                    pygame.draw.rect(self.image, (120, 120, 160), (18, 48, 10, 20))  # Left leg back
+                    pygame.draw.rect(self.image, (120, 120, 160), (32, 46, 10, 22))  # Right leg forward
+                
+                # Outlines for walking pose
+                pygame.draw.rect(self.image, (80, 80, 100), (6, 26, 10, 20), 1)
+                pygame.draw.rect(self.image, (80, 80, 100), (46, 26, 10, 20), 1)
+                pygame.draw.rect(self.image, (80, 80, 100), (18, 46, 10, 22), 1)
+                pygame.draw.rect(self.image, (80, 80, 100), (32, 46, 10, 22), 1)
+                
+                # Gloves and boots
+                pygame.draw.rect(self.image, (60, 60, 80), (4, 44, 12, 8))
+                pygame.draw.rect(self.image, (60, 60, 80), (44, 44, 12, 8))
+                pygame.draw.rect(self.image, (80, 80, 100), (16, 68, 14, 8))
+                pygame.draw.rect(self.image, (80, 80, 100), (30, 68, 14, 8))
+            else:
+                # Idle pose - standing still
+                pygame.draw.rect(self.image, (120, 120, 160), (6, 28, 8, 18))    # Left arm
+                pygame.draw.rect(self.image, (120, 120, 160), (46, 28, 8, 18))   # Right arm
+                pygame.draw.rect(self.image, (60, 60, 80), (4, 46, 12, 8))       # Left fist
+                pygame.draw.rect(self.image, (60, 60, 80), (44, 46, 12, 8))      # Right fist
+                
+                # Legs together
+                pygame.draw.rect(self.image, (120, 120, 160), (18, 48, 10, 20))
+                pygame.draw.rect(self.image, (120, 120, 160), (32, 48, 10, 20))
+                pygame.draw.rect(self.image, (80, 80, 100), (16, 68, 14, 8))
+                pygame.draw.rect(self.image, (80, 80, 100), (30, 68, 14, 8))
+                
+                # Outlines
+                pygame.draw.rect(self.image, (80, 80, 100), (6, 28, 8, 18), 1)
+                pygame.draw.rect(self.image, (80, 80, 100), (46, 28, 8, 18), 1)
+                pygame.draw.rect(self.image, (80, 80, 100), (18, 48, 10, 20), 1)
+                pygame.draw.rect(self.image, (80, 80, 100), (32, 48, 10, 20), 1)
+        else:
+            self.image.fill(RED)
     def __init__(self, x, y, left_bound, right_bound, can_shoot=False):
         super().__init__()
         self.image = pygame.Surface((35, 35), pygame.SRCALPHA)
@@ -170,7 +348,7 @@ class Enemy(pygame.sprite.Sprite):
             self.last_shoot_time -= 1
 
 class Boss(pygame.sprite.Sprite):
-    def __init__(self, x, y):
+    def __init__(self, x, y, player=None):
         super().__init__()
         self.image = pygame.Surface((80, 80), pygame.SRCALPHA)
         # Cyberpunk boss: massive neon pink square with intense glow
@@ -196,6 +374,8 @@ class Boss(pygame.sprite.Sprite):
         self.shoot_cooldown = 60  # Shoots more frequently (1 second at 60 FPS)
         self.hit_flash_time = 0  # Frames to flash red after being hit
         self.hit_flash_duration = 10  # Duration of red flash (10 frames)
+        self.player = player  # Reference to player for tracking laser
+        self.tracker_laser = None  # Will hold the tracking laser
     
     def take_damage(self):
         """Called when hit by player laser"""
@@ -204,16 +384,24 @@ class Boss(pygame.sprite.Sprite):
         return self.health <= 0  # Return True if boss is defeated
     
     def shoot(self):
-        """Return a new boss laser (special variant)"""
+        """Fire the tracking laser that was locked onto the player"""
         self.last_shoot_time = self.shoot_cooldown
-        direction = 1 if self.vel_x > 0 else -1
-        return BossLaser(self.rect.centerx, self.rect.centery, direction)
+        if self.tracker_laser and not self.tracker_laser.is_fired:
+            self.tracker_laser.fire()
+            return self.tracker_laser
+        return None
     
     def update(self):
         # Patrol movement
         self.rect.x += self.vel_x
         if self.rect.left <= self.left_bound or self.rect.right >= self.right_bound:
             self.vel_x *= -1
+        
+        # Update or create tracking laser
+        if self.player:
+            if not self.tracker_laser or self.tracker_laser.is_fired:
+                # Create new tracking laser if none exists or previous one was fired
+                self.tracker_laser = TrackerLaser(self, self.player)
         
         # Decrement shoot cooldown
         if self.last_shoot_time > 0:
@@ -322,6 +510,77 @@ class EnemyLaser(pygame.sprite.Sprite):
         # Remove laser if it goes off screen
         if self.rect.right < 0 or self.rect.left > SCREEN_WIDTH + 500:
             self.kill()
+
+class TrackerLaser(pygame.sprite.Sprite):
+    """A tracking beam that locks onto the player until the boss fires"""
+    def __init__(self, boss, player):
+        super().__init__()
+        self.boss = boss
+        self.player = player
+        self.is_fired = False
+        self.fired_direction_x = 0
+        self.fired_direction_y = 0
+        self.speed = 6  # Speed after firing
+        self.fired_laser_rect = None  # The actual fired laser rect
+        self.image = pygame.Surface((1, 1), pygame.SRCALPHA)
+        self.rect = self.image.get_rect()
+    
+    def calculate_direction(self):
+        """Calculate direction vector to player"""
+        dx = self.player.rect.centerx - self.boss.rect.centerx
+        dy = self.player.rect.centery - self.boss.rect.centery
+        
+        # Normalize direction
+        dist = math.sqrt(dx*dx + dy*dy)
+        if dist > 0:
+            return dx / dist, dy / dist
+        return 0, 0
+    
+    def fire(self):
+        """Fire the laser in the direction it was tracking"""
+        self.is_fired = True
+        self.fired_direction_x, self.fired_direction_y = self.calculate_direction()
+        self.fired_laser_rect = pygame.Rect(
+            self.boss.rect.centerx,
+            self.boss.rect.centery,
+            25, 8
+        )
+    
+    def update(self):
+        if self.is_fired:
+            # Move laser after firing
+            if self.fired_laser_rect:
+                self.fired_laser_rect.x += self.speed * self.fired_direction_x
+                self.fired_laser_rect.y += self.speed * self.fired_direction_y
+                
+                # Remove laser if it goes off screen
+                if self.fired_laser_rect.right < 0 or self.fired_laser_rect.left > SCREEN_WIDTH + 500 or \
+                   self.fired_laser_rect.bottom < 0 or self.fired_laser_rect.top > SCREEN_HEIGHT + 500:
+                    self.kill()
+        else:
+            # Tracking mode: update position to boss center
+            self.rect.center = self.boss.rect.center
+    
+    def draw(self, surface, camera_x):
+        """Draw the tracking beam and/or fired laser"""
+        if self.is_fired and self.fired_laser_rect:
+            # Draw fired laser as a neon pink bolt
+            pygame.draw.rect(surface, NEON_PINK, 
+                           (self.fired_laser_rect.x - camera_x, self.fired_laser_rect.y, 
+                            self.fired_laser_rect.width, self.fired_laser_rect.height))
+            pygame.draw.rect(surface, NEON_MAGENTA, 
+                           (self.fired_laser_rect.x - camera_x, self.fired_laser_rect.y, 
+                            self.fired_laser_rect.width, self.fired_laser_rect.height), 1)
+        else:
+            # Draw tracking beam as a neon cyan line from boss to player
+            if USE_CYBERPUNK_THEME:
+                pygame.draw.line(surface, NEON_CYAN, 
+                               (self.boss.rect.centerx - camera_x, self.boss.rect.centery),
+                               (self.player.rect.centerx - camera_x, self.player.rect.centery), 2)
+                # Add glow effect with thicker purple line underneath
+                pygame.draw.line(surface, NEON_PURPLE, 
+                               (self.boss.rect.centerx - camera_x, self.boss.rect.centery),
+                               (self.player.rect.centerx - camera_x, self.player.rect.centery), 1)
 
 class BossLaser(pygame.sprite.Sprite):
     def __init__(self, x, y, direction=1):
@@ -641,7 +900,7 @@ class Game:
             self.all_sprites.add(enemy)
         
         # Boss at the end (on the wide platform)
-        boss = Boss(5950, 370)  # 370 = 450 - 80 (platform_y - boss_height)
+        boss = Boss(5950, 370, player=self.player)  # 370 = 450 - 80 (platform_y - boss_height)
         self.bosses.add(boss)
         self.all_sprites.add(boss)
         
@@ -701,6 +960,7 @@ class Game:
             self.all_sprites.add(new_laser)
         
         self.player.update(self.platforms)
+        self.player.redraw()  # Update shooting animation
         self.enemies.update()
         
         # Handle enemy shooting
@@ -715,12 +975,15 @@ class Game:
         
         # Handle boss shooting (more aggressive)
         for boss in self.bosses:
+            # Update tracking laser in Game loop
+            if boss.tracker_laser:
+                boss.tracker_laser.update()
+            
             if boss.last_shoot_time <= 0:
                 # Boss shoots more frequently (~3% chance per frame)
                 if random.random() < 0.03:
                     new_boss_laser = boss.shoot()
-                    self.enemy_lasers.add(new_boss_laser)
-                    self.all_sprites.add(new_boss_laser)
+                    # Don't add TrackerLaser to sprite groups - it uses custom drawing
         
         self.collectibles.update()  # Update collectible animations
         self.lasers.update()  # Update lasers
@@ -765,6 +1028,14 @@ class Game:
         
         # Enemy laser collisions with player - damage
         enemy_lasers_hit = pygame.sprite.spritecollide(self.player, self.enemy_lasers, True)
+        
+        # Also check tracker laser collision with player
+        for boss in self.bosses:
+            if boss.tracker_laser and boss.tracker_laser.is_fired and boss.tracker_laser.fired_laser_rect:
+                if self.player.rect.colliderect(boss.tracker_laser.fired_laser_rect):
+                    enemy_lasers_hit.append(boss.tracker_laser)  # Treat as laser hit
+                    boss.tracker_laser.kill()
+        
         if enemy_lasers_hit:
             # Player hit by enemy laser - reset
             self.player.rect.topleft = (100, 100)
@@ -934,6 +1205,11 @@ class Game:
                 
                 health_text = self.font_small.render(f"Boss: {boss.health}/5", True, BLACK)
                 self.screen.blit(health_text, (bar_x, bar_y - 20))
+        
+        # Draw tracker lasers (visual beams from boss to player)
+        for boss in self.bosses:
+            if boss.tracker_laser:
+                boss.tracker_laser.draw(self.screen, self.camera_x)
         
         pygame.display.flip()
     
