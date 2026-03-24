@@ -47,8 +47,8 @@ class Player(pygame.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__()
         # Player sprite dimensions
-        PLAYER_WIDTH = 60
-        PLAYER_HEIGHT = 90
+        PLAYER_WIDTH = 50
+        PLAYER_HEIGHT = 75
         
         # Load sprite images from assets
         try:
@@ -73,12 +73,12 @@ class Player(pygame.sprite.Sprite):
         except Exception as e:
             # Fallback to drawn sprite if images not found
             print(f"Warning: Could not load player images ({e}). Using fallback sprite.")
-            self.image = pygame.Surface((60, 90), pygame.SRCALPHA)
+            self.image = pygame.Surface((50, 75), pygame.SRCALPHA)
             if USE_CYBERPUNK_THEME:
-                pygame.draw.rect(self.image, NEON_CYAN, (15, 15, 30, 60))
-                pygame.draw.rect(self.image, NEON_MAGENTA, (12, 12, 36, 66), 2)
-                pygame.draw.line(self.image, NEON_PURPLE, (8, 30), (52, 30), 1)
-                pygame.draw.line(self.image, NEON_PURPLE, (8, 60), (52, 60), 1)
+                pygame.draw.rect(self.image, NEON_CYAN, (13, 12, 24, 51))
+                pygame.draw.rect(self.image, NEON_MAGENTA, (10, 10, 30, 55), 2)
+                pygame.draw.line(self.image, NEON_PURPLE, (7, 25), (43, 25), 1)
+                pygame.draw.line(self.image, NEON_PURPLE, (7, 50), (43, 50), 1)
             else:
                 self.image.fill(RED)
         
