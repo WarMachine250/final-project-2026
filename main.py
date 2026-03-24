@@ -46,12 +46,28 @@ PURPLE = (200, 0, 200)
 class Player(pygame.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__()
+        # Player sprite dimensions
+        PLAYER_WIDTH = 40
+        PLAYER_HEIGHT = 60
+        
         # Load sprite images from assets
         try:
-            self.idle_image = pygame.image.load("assets/blast.png").convert_alpha()
-            self.walk1_image = pygame.image.load("assets/walk1.png").convert_alpha()
-            self.jump_image = pygame.image.load("assets/jump.png").convert_alpha()
-            self.shooting_image = pygame.image.load("assets/blast (1).png").convert_alpha()
+            self.idle_image = pygame.transform.scale(
+                pygame.image.load("assets/blast.png").convert_alpha(),
+                (PLAYER_WIDTH, PLAYER_HEIGHT)
+            )
+            self.walk1_image = pygame.transform.scale(
+                pygame.image.load("assets/walk1.png").convert_alpha(),
+                (PLAYER_WIDTH, PLAYER_HEIGHT)
+            )
+            self.jump_image = pygame.transform.scale(
+                pygame.image.load("assets/jump.png").convert_alpha(),
+                (PLAYER_WIDTH, PLAYER_HEIGHT)
+            )
+            self.shooting_image = pygame.transform.scale(
+                pygame.image.load("assets/blast (1).png").convert_alpha(),
+                (PLAYER_WIDTH, PLAYER_HEIGHT)
+            )
             # Fallback: use blast image as all-purpose sprite
             self.image = self.idle_image
         except Exception as e:
