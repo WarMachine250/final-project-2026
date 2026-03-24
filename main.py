@@ -46,57 +46,25 @@ PURPLE = (200, 0, 200)
 class Player(pygame.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__()
-        self.image = pygame.Surface((60, 80), pygame.SRCALPHA)
-        if USE_CYBERPUNK_THEME:
-            # Head/Helmet (red visor)
-            pygame.draw.rect(self.image, (100, 100, 150), (18, 8, 24, 16))  # Helmet base
-            pygame.draw.rect(self.image, (200, 50, 50), (22, 10, 16, 8))     # Red visor
-            pygame.draw.line(self.image, (150, 150, 200), (18, 8), (42, 8), 1)  # Top highlight
-            
-            # Shoulders
-            pygame.draw.rect(self.image, (120, 120, 160), (10, 20, 10, 8))   # Left shoulder
-            pygame.draw.rect(self.image, (120, 120, 160), (40, 20, 10, 8))   # Right shoulder
-            
-            # Chest/Body (tan/gold color with cyan accents)
-            pygame.draw.rect(self.image, (180, 150, 100), (16, 24, 28, 20))  # Main chest
-            pygame.draw.rect(self.image, (100, 180, 200), (18, 26, 24, 4))   # Cyan chest stripe
-            pygame.draw.rect(self.image, (100, 100, 150), (16, 24, 28, 20), 2)  # Dark outline
-            
-            # Arms
-            pygame.draw.rect(self.image, (120, 120, 160), (6, 28, 8, 18))    # Left arm
-            pygame.draw.rect(self.image, (120, 120, 160), (46, 28, 8, 18))   # Right arm
-            pygame.draw.rect(self.image, (80, 80, 100), (6, 28, 8, 18), 1)   # Arm outline
-            pygame.draw.rect(self.image, (80, 80, 100), (46, 28, 8, 18), 1)  # Arm outline
-            
-            # Gloves/Fists
-            pygame.draw.rect(self.image, (60, 60, 80), (4, 46, 12, 8))       # Left fist
-            pygame.draw.rect(self.image, (60, 60, 80), (44, 46, 12, 8))      # Right fist
-            
-            # Waist belt
-            pygame.draw.rect(self.image, (200, 180, 100), (14, 42, 32, 4))   # Gold belt
-            
-            # Legs
-            pygame.draw.rect(self.image, (120, 120, 160), (18, 48, 10, 20))  # Left leg
-            pygame.draw.rect(self.image, (120, 120, 160), (32, 48, 10, 20))  # Right leg
-            pygame.draw.rect(self.image, (80, 80, 100), (18, 48, 10, 20), 1) # Left leg outline
-            pygame.draw.rect(self.image, (80, 80, 100), (32, 48, 10, 20), 1) # Right leg outline
-            
-            # Feet/Boots
-            pygame.draw.rect(self.image, (80, 80, 100), (16, 68, 14, 8))     # Left boot
-            pygame.draw.rect(self.image, (80, 80, 100), (30, 68, 14, 8))     # Right boot
-            
-            # Details - cyan shoulder missiles/vents
-            pygame.draw.circle(self.image, (100, 180, 200), (15, 18), 3)     # Left shoulder vent
-            pygame.draw.circle(self.image, (100, 180, 200), (45, 18), 3)     # Right shoulder vent
-            # Draw main body with cyan
-            pygame.draw.rect(self.image, NEON_CYAN, (10, 10, 20, 40))
-            # Add magenta border for glow effect
-            pygame.draw.rect(self.image, NEON_MAGENTA, (8, 8, 24, 44), 2)
-            # Add accent lines
-            pygame.draw.line(self.image, NEON_PURPLE, (5, 20), (35, 20), 1)
-            pygame.draw.line(self.image, NEON_PURPLE, (5, 40), (35, 40), 1)
-        else:
-            self.image.fill(RED)
+        # Load sprite images from assets
+        try:
+            self.idle_image = pygame.image.load("assets/blast.png").convert_alpha()
+            self.walk1_image = pygame.image.load("assets/walk1.png").convert_alpha()
+            self.jump_image = pygame.image.load("assets/jump.png").convert_alpha()
+            self.shooting_image = pygame.image.load("assets/blast (1).png").convert_alpha()
+            # Fallback: use blast image as all-purpose sprite
+            self.image = self.idle_image
+        except Exception as e:
+            # Fallback to drawn sprite if images not found
+            print(f"Warning: Could not load player images ({e}). Using fallback sprite.")
+            self.image = pygame.Surface((40, 60), pygame.SRCALPHA)
+            if USE_CYBERPUNK_THEME:
+                pygame.draw.rect(self.image, NEON_CYAN, (10, 10, 20, 40))
+                pygame.draw.rect(self.image, NEON_MAGENTA, (8, 8, 24, 44), 2)
+                pygame.draw.line(self.image, NEON_PURPLE, (5, 20), (35, 20), 1)
+                pygame.draw.line(self.image, NEON_PURPLE, (5, 40), (35, 40), 1)
+            else:
+                self.image.fill(RED)
         
         self.rect = self.image.get_rect(topleft=(x, y))
         self.vel_y = 0
@@ -106,9 +74,9 @@ class Player(pygame.sprite.Sprite):
         self.facing_right = True  # Track which direction player is facing
         self.last_laser_time = 0  # Cooldown for laser firing
         self.laser_cooldown = 30  # Frames between laser shots (0.5 seconds at 60 FPS)
-        self.shooting_anim_time = 0  # Animation counter for shooting pose
-        self.shooting_anim_duration = 8  # Frames to show shooting animation
-        # Walking animation
+        # Animation state variables
+        self.shooting_anim_time = 0  # Current frame of shooting animation
+        self.shooting_anim_duration = 8  # Total frames for shooting animation
         self.walking_frame = 0  # Current frame of walk cycle (0 or 1)
         self.walk_anim_counter = 0  # Counter for walk animation timing
         self.walk_frame_duration = 10  # Frames per step (0.167 seconds at 60 FPS)
@@ -132,10 +100,6 @@ class Player(pygame.sprite.Sprite):
         """Return a new laser in the direction the player is facing"""
         self.last_laser_time = self.laser_cooldown
         self.shooting_anim_time = self.shooting_anim_duration  # Trigger shooting animation
-        # Walking animation
-        self.walking_frame = 0  # Current frame of walk cycle (0 or 1)
-        self.walk_anim_counter = 0  # Counter for walk animation timing
-        self.walk_frame_duration = 10  # Frames per step (0.167 seconds at 60 FPS)
         # Fire from the center of the player
         direction = 1 if self.facing_right else -1
         return Laser(self.rect.centerx, self.rect.centery, direction)
@@ -183,132 +147,31 @@ class Player(pygame.sprite.Sprite):
         if self.rect.top > SCREEN_HEIGHT:
             self.rect.topleft = (100, 100)
             self.vel_y = 0
-
-        # Update walking animation
-        if abs(self.vel_x) > 0:
-            self.walk_anim_counter += 1
-            if self.walk_anim_counter >= self.walk_frame_duration:
-                self.walk_anim_counter = 0
-                self.walking_frame = 1 - self.walking_frame  # Toggle between 0 and 1
-        else:
-            self.walk_anim_counter = 0  # Reset when not moving
-            self.shooting_anim_time -= 1
         
-        # Move horizontally first and check collisions
-        self.rect.x += self.vel_x
-        for platform in platforms:
-            if self.rect.colliderect(platform.rect):
-                if self.vel_x > 0:
-                    self.rect.right = platform.rect.left
-                elif self.vel_x < 0:
-                    self.rect.left = platform.rect.right
-        
-        # Move vertically and check collisions
-        self.rect.y += self.vel_y
-        self.is_jumping = True
-        for platform in platforms:
-            if self.rect.colliderect(platform.rect):
-                if self.vel_y > 0:
-                    self.rect.bottom = platform.rect.top
-                    self.vel_y = 0
-                    self.is_jumping = False
-                elif self.vel_y < 0:
-                    self.rect.top = platform.rect.bottom
-                    self.vel_y = 0
-        
-        # Fall off screen
-        if self.rect.top > SCREEN_HEIGHT:
-            self.rect.topleft = (100, 100)
-            self.vel_y = 0
+        # Update sprite image based on current state
+        self.redraw()
 
     def redraw(self):
-        """Redraw the player sprite with walking and shooting animations"""
-        self.image = pygame.Surface((60, 80), pygame.SRCALPHA)
-        
-        # Draw base player sprite
-        def draw_base_player():
-            # Head/Helmet (red visor)
-            pygame.draw.rect(self.image, (100, 100, 150), (18, 8, 24, 16))
-            pygame.draw.rect(self.image, (200, 50, 50), (22, 10, 16, 8))
-            pygame.draw.line(self.image, (150, 150, 200), (18, 8), (42, 8), 1)
-            
-            # Shoulders
-            pygame.draw.rect(self.image, (120, 120, 160), (10, 20, 10, 8))
-            pygame.draw.rect(self.image, (120, 120, 160), (40, 20, 10, 8))
-            
-            # Chest/Body
-            pygame.draw.rect(self.image, (180, 150, 100), (16, 24, 28, 20))
-            pygame.draw.rect(self.image, (100, 180, 200), (18, 26, 24, 4))
-            pygame.draw.rect(self.image, (100, 100, 150), (16, 24, 28, 20), 2)
-            
-            # Waist belt
-            pygame.draw.rect(self.image, (200, 180, 100), (14, 42, 32, 4))
-            
-            # Shoulder vents
-            pygame.draw.circle(self.image, (100, 180, 200), (15, 18), 3)
-            pygame.draw.circle(self.image, (100, 180, 200), (45, 18), 3)
-        
-        if USE_CYBERPUNK_THEME:
-            draw_base_player()
-            
-            if self.shooting_anim_time > 0:
-                # Shooting pose: extended arm with weapon effect
-                pygame.draw.rect(self.image, (120, 120, 160), (6, 28, 12, 18))  # Extended left arm
-                pygame.draw.rect(self.image, (200, 100, 50), (6, 32, 14, 4))    # Weapon barrel
-                pygame.draw.rect(self.image, (80, 80, 100), (6, 28, 12, 18), 1)
-                
-                # Right arm at side
-                pygame.draw.rect(self.image, (120, 120, 160), (46, 28, 8, 18))
-                
-                # Bright glow effect
-                pygame.draw.circle(self.image, (100, 200, 255), (15, 32), 4)
-            elif abs(self.vel_x) > 0:
-                # Walking pose - legs in stride
-                # Arms swing opposite to legs
-                if self.walking_frame == 0:
-                    # Left leg forward, right arm forward
-                    pygame.draw.rect(self.image, (120, 120, 160), (6, 26, 10, 20))   # Left arm forward
-                    pygame.draw.rect(self.image, (120, 120, 160), (46, 32, 8, 14))   # Right arm back
-                    pygame.draw.rect(self.image, (120, 120, 160), (18, 46, 10, 22))  # Left leg forward
-                    pygame.draw.rect(self.image, (120, 120, 160), (32, 48, 10, 20))  # Right leg back
-                else:
-                    # Right leg forward, left arm forward
-                    pygame.draw.rect(self.image, (120, 120, 160), (6, 32, 8, 14))    # Left arm back
-                    pygame.draw.rect(self.image, (120, 120, 160), (46, 26, 10, 20))  # Right arm forward
-                    pygame.draw.rect(self.image, (120, 120, 160), (18, 48, 10, 20))  # Left leg back
-                    pygame.draw.rect(self.image, (120, 120, 160), (32, 46, 10, 22))  # Right leg forward
-                
-                # Outlines for walking pose
-                pygame.draw.rect(self.image, (80, 80, 100), (6, 26, 10, 20), 1)
-                pygame.draw.rect(self.image, (80, 80, 100), (46, 26, 10, 20), 1)
-                pygame.draw.rect(self.image, (80, 80, 100), (18, 46, 10, 22), 1)
-                pygame.draw.rect(self.image, (80, 80, 100), (32, 46, 10, 22), 1)
-                
-                # Gloves and boots
-                pygame.draw.rect(self.image, (60, 60, 80), (4, 44, 12, 8))
-                pygame.draw.rect(self.image, (60, 60, 80), (44, 44, 12, 8))
-                pygame.draw.rect(self.image, (80, 80, 100), (16, 68, 14, 8))
-                pygame.draw.rect(self.image, (80, 80, 100), (30, 68, 14, 8))
-            else:
-                # Idle pose - standing still
-                pygame.draw.rect(self.image, (120, 120, 160), (6, 28, 8, 18))    # Left arm
-                pygame.draw.rect(self.image, (120, 120, 160), (46, 28, 8, 18))   # Right arm
-                pygame.draw.rect(self.image, (60, 60, 80), (4, 46, 12, 8))       # Left fist
-                pygame.draw.rect(self.image, (60, 60, 80), (44, 46, 12, 8))      # Right fist
-                
-                # Legs together
-                pygame.draw.rect(self.image, (120, 120, 160), (18, 48, 10, 20))
-                pygame.draw.rect(self.image, (120, 120, 160), (32, 48, 10, 20))
-                pygame.draw.rect(self.image, (80, 80, 100), (16, 68, 14, 8))
-                pygame.draw.rect(self.image, (80, 80, 100), (30, 68, 14, 8))
-                
-                # Outlines
-                pygame.draw.rect(self.image, (80, 80, 100), (6, 28, 8, 18), 1)
-                pygame.draw.rect(self.image, (80, 80, 100), (46, 28, 8, 18), 1)
-                pygame.draw.rect(self.image, (80, 80, 100), (18, 48, 10, 20), 1)
-                pygame.draw.rect(self.image, (80, 80, 100), (32, 48, 10, 20), 1)
+        """Redraw the player sprite, showing appropriate animation state"""
+        # Determine which image to use based on player state
+        if self.shooting_anim_time > 0:
+            # Show shooting pose
+            self.image = self.shooting_image
+        elif self.is_jumping or self.vel_y != 0:
+            # Show jumping pose when airborne
+            self.image = self.jump_image
+        elif abs(self.vel_x) > 0:
+            # Show walking pose when moving horizontally
+            self.image = self.walk1_image
         else:
-            self.image.fill(RED)
+            # Show idle pose when stationary
+            self.image = self.idle_image
+        
+        # Flip image if facing left
+        if not self.facing_right:
+            self.image = pygame.transform.flip(self.image, True, False)
+
+class Enemy(pygame.sprite.Sprite):
     def __init__(self, x, y, left_bound, right_bound, can_shoot=False):
         super().__init__()
         self.image = pygame.Surface((35, 35), pygame.SRCALPHA)
@@ -346,6 +209,46 @@ class Player(pygame.sprite.Sprite):
         # Decrement shoot cooldown
         if self.last_shoot_time > 0:
             self.last_shoot_time -= 1
+
+class Enemy(pygame.sprite.Sprite):
+    def __init__(self, x, y, left_bound, right_bound, can_shoot=False):
+        super().__init__()
+        self.image = pygame.Surface((35, 35), pygame.SRCALPHA)
+        # Cyberpunk enemy: neon magenta with purple glow
+        if USE_CYBERPUNK_THEME:
+            # Main body
+            pygame.draw.circle(self.image, NEON_MAGENTA, (17, 17), 15)
+            # Glow outline
+            pygame.draw.circle(self.image, NEON_PURPLE, (17, 17), 17, 2)
+            # Inner detail
+            pygame.draw.line(self.image, NEON_CYAN, (10, 17), (24, 17), 2)
+        else:
+            self.image.fill(GREEN)
+        
+        self.rect = self.image.get_rect(topleft=(x, y))
+        self.vel_x = 2
+        self.left_bound = left_bound
+        self.right_bound = right_bound
+        self.can_shoot = can_shoot  # Whether this enemy can shoot
+        self.last_shoot_time = 0  # Cooldown for shooting
+        self.shoot_cooldown = 120  # Frames between shots (2 seconds at 60 FPS)
+    
+    def shoot(self):
+        """Return a new enemy laser in direction it's facing"""
+        self.last_shoot_time = self.shoot_cooldown
+        # Fire towards the direction enemy is moving
+        direction = 1 if self.vel_x > 0 else -1
+        return EnemyLaser(self.rect.centerx, self.rect.centery, direction)
+    
+    def update(self):
+        self.rect.x += self.vel_x
+        if self.rect.left <= self.left_bound or self.rect.right >= self.right_bound:
+            self.vel_x *= -1
+        
+        # Decrement shoot cooldown
+        if self.last_shoot_time > 0:
+            self.last_shoot_time -= 1
+
 
 class Boss(pygame.sprite.Sprite):
     def __init__(self, x, y, player=None):
