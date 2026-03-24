@@ -524,6 +524,67 @@ class BossLaser(pygame.sprite.Sprite):
         if self.rect.right < 0 or self.rect.left > SCREEN_WIDTH + 500:
             self.kill()
 
+
+class Explosion(pygame.sprite.Sprite):
+    def __init__(self, x, y, size=40, duration=15):
+        super().__init__()
+        self.x = x
+        self.y = y
+        self.size = size
+        self.duration = duration
+        self.age = 0
+        self.image = pygame.Surface((size, size), pygame.SRCALPHA)
+        self.rect = self.image.get_rect(center=(x, y))
+        self.update()
+    
+    def update(self):
+        self.age += 1
+        
+        # Calculate fade effect (shrink and fade out)
+        progress = self.age / self.duration
+        current_size = int(self.size * (1 - progress))
+        alpha = int(255 * (1 - progress))
+        
+        # Recreate surface for this frame
+        self.image = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
+        
+        if USE_CYBERPUNK_THEME:
+            # Cyberpunk explosion: bright neon with expanding rings
+            center = self.size // 2
+            
+            # Outer ring (yellow/orange)
+            if current_size > 0:
+                pygame.draw.circle(self.image, (*NEON_MAGENTA[:3], alpha), (center, center), current_size)
+            
+            # Middle ring (cyan)
+            if current_size > 5:
+                pygame.draw.circle(self.image, (*NEON_CYAN[:3], alpha), (center, center), max(1, current_size - 5))
+            
+            # Inner bright core (yellow)
+            if current_size > 10:
+                pygame.draw.circle(self.image, (255, 255, 0, alpha), (center, center), max(1, current_size - 10))
+            
+            # Spark rays
+            if current_size > 3:
+                spark_radius = current_size + 5
+                for angle in range(0, 360, 45):
+                    rad = math.radians(angle)
+                    end_x = center + spark_radius * math.cos(rad)
+                    end_y = center + spark_radius * math.sin(rad)
+                    pygame.draw.line(self.image, (NEON_CYAN[0], NEON_CYAN[1], NEON_CYAN[2], alpha),
+                                   (center, center), (int(end_x), int(end_y)), 2)
+        else:
+            # Classic explosion: red/orange expanding circle
+            center = self.size // 2
+            if current_size > 0:
+                pygame.draw.circle(self.image, (255, 100, 0), (center, center), current_size)
+            if current_size > 5:
+                pygame.draw.circle(self.image, (255, 200, 0), (center, center), max(1, current_size - 5))
+        
+        # Remove when animation is done
+        if self.age >= self.duration:
+            self.kill()
+
 class Platform(pygame.sprite.Sprite):
     def __init__(self, x, y, width, height, color=None):
         super().__init__()
@@ -586,6 +647,7 @@ class Game:
         self.lasers = pygame.sprite.Group()  # NEW: Laser group
         self.enemy_lasers = pygame.sprite.Group()  # NEW: Enemy laser group
         self.bosses = pygame.sprite.Group()  # NEW: Boss group
+        self.explosions = pygame.sprite.Group()  # NEW: Explosion effects
         self.all_sprites = pygame.sprite.Group()
         
         # Create level
@@ -878,6 +940,7 @@ class Game:
         self.player.update(self.platforms)
         self.player.redraw()  # Update shooting animation
         self.enemies.update()
+        self.explosions.update()  # Update explosion animations
         
         # Handle enemy shooting
         import random
@@ -927,6 +990,9 @@ class Game:
         for laser in self.lasers:
             enemies_hit = pygame.sprite.spritecollide(laser, self.enemies, False)
             for enemy in enemies_hit:
+                # Create explosion at enemy position
+                explosion = Explosion(enemy.rect.centerx, enemy.rect.centery, size=50, duration=15)
+                self.explosions.add(explosion)
                 enemy.kill()
                 laser.kill()
                 self.score += 50  # Score for laser kill
@@ -934,9 +1000,14 @@ class Game:
             # Laser collisions with boss
             bosses_hit = pygame.sprite.spritecollide(laser, self.bosses, False)
             for boss in bosses_hit:
+                # Create explosion at boss hit location
+                explosion = Explosion(boss.rect.centerx, boss.rect.centery, size=70, duration=20)
+                self.explosions.add(explosion)
                 laser.kill()
                 if boss.take_damage():
-                    # Boss defeated
+                    # Boss defeated - larger explosion
+                    big_explosion = Explosion(boss.rect.centerx, boss.rect.centery, size=100, duration=25)
+                    self.explosions.add(big_explosion)
                     boss.kill()
                     self.score += 500  # Massive score for defeating boss
                 else:
@@ -963,6 +1034,9 @@ class Game:
         for enemy in enemies_hit:
             if self.player.vel_y > 0 and self.player.rect.bottom - self.player.vel_y <= enemy.rect.centery:
                 # Player jumped on enemy from above
+                # Create explosion at enemy position
+                explosion = Explosion(enemy.rect.centerx, enemy.rect.centery, size=45, duration=15)
+                self.explosions.add(explosion)
                 enemy.kill()
                 self.player.vel_y = -JUMP_STRENGTH
                 self.score += 50
@@ -1038,6 +1112,10 @@ class Game:
         # Draw sprites with camera offset
         for sprite in self.all_sprites:
             self.screen.blit(sprite.image, (sprite.rect.x - self.camera_x, sprite.rect.y))
+        
+        # Draw explosions with camera offset
+        for explosion in self.explosions:
+            self.screen.blit(explosion.image, (explosion.x - self.camera_x, explosion.y))
         
         # Draw HUD - Score and Level
         if USE_CYBERPUNK_THEME:
