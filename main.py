@@ -176,12 +176,9 @@ class Player(pygame.sprite.Sprite):
         elif self.is_jumping or self.vel_y != 0:
             # Show jumping pose when airborne
             self.image = self.jump_image
-        elif abs(self.vel_x) > 0:
-            # Show walking pose when moving horizontally
-            self.image = self.walk1_image
         else:
-            # Show idle pose when stationary
-            self.image = self.idle_image
+            # Show walking pose for both moving and idle (standing still)
+            self.image = self.walk1_image
         
         # Flip image if facing left
         if not self.facing_right:
