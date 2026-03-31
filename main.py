@@ -193,24 +193,16 @@ class Enemy(pygame.sprite.Sprite):
         
         # Load enemy sprite images from assets
         try:
-            self.top_left_image = pygame.transform.scale(
-                pygame.image.load("assets/top_left.png").convert_alpha(),
+            self.left_image = pygame.transform.scale(
+                pygame.image.load("assets/left.png").convert_alpha(),
                 (ENEMY_WIDTH, ENEMY_HEIGHT)
             )
-            self.top_right_image = pygame.transform.scale(
-                pygame.image.load("assets/top_right.png").convert_alpha(),
+            self.right_image = pygame.transform.scale(
+                pygame.image.load("assets/right.png").convert_alpha(),
                 (ENEMY_WIDTH, ENEMY_HEIGHT)
             )
-            self.bottom_left_image = pygame.transform.scale(
-                pygame.image.load("assets/bottom_left.png").convert_alpha(),
-                (ENEMY_WIDTH, ENEMY_HEIGHT)
-            )
-            self.bottom_right_image = pygame.transform.scale(
-                pygame.image.load("assets/bottom_right.png").convert_alpha(),
-                (ENEMY_WIDTH, ENEMY_HEIGHT)
-            )
-            # Use top_left as default pose
-            self.image = self.top_left_image
+            # Use right as default pose
+            self.image = self.right_image
         except Exception as e:
             # Fallback to drawn sprite if images not found
             print(f"Warning: Could not load enemy images ({e}). Using fallback sprite.")
@@ -244,10 +236,10 @@ class Enemy(pygame.sprite.Sprite):
         """Update sprite image based on movement direction"""
         if self.vel_x > 0:
             # Moving right - use right-facing image
-            self.image = self.bottom_right_image
+            self.image = self.right_image
         else:
             # Moving left - use left-facing image
-            self.image = self.bottom_left_image
+            self.image = self.left_image
     
     def update(self):
         self.rect.x += self.vel_x
