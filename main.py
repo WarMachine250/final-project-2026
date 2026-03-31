@@ -240,10 +240,22 @@ class Enemy(pygame.sprite.Sprite):
         direction = 1 if self.vel_x > 0 else -1
         return EnemyLaser(self.rect.centerx, self.rect.centery, direction)
     
+    def update_sprite(self):
+        """Update sprite image based on movement direction"""
+        if self.vel_x > 0:
+            # Moving right - use right-facing image
+            self.image = self.bottom_right_image
+        else:
+            # Moving left - use left-facing image
+            self.image = self.bottom_left_image
+    
     def update(self):
         self.rect.x += self.vel_x
         if self.rect.left <= self.left_bound or self.rect.right >= self.right_bound:
             self.vel_x *= -1
+        
+        # Update sprite image based on direction
+        self.update_sprite()
         
         # Decrement shoot cooldown
         if self.last_shoot_time > 0:
