@@ -187,17 +187,43 @@ class Player(pygame.sprite.Sprite):
 class Enemy(pygame.sprite.Sprite):
     def __init__(self, x, y, left_bound, right_bound, can_shoot=False):
         super().__init__()
-        self.image = pygame.Surface((35, 35), pygame.SRCALPHA)
-        # Cyberpunk enemy: neon magenta with purple glow
-        if USE_CYBERPUNK_THEME:
-            # Main body
-            pygame.draw.circle(self.image, NEON_MAGENTA, (17, 17), 15)
-            # Glow outline
-            pygame.draw.circle(self.image, NEON_PURPLE, (17, 17), 17, 2)
-            # Inner detail
-            pygame.draw.line(self.image, NEON_CYAN, (10, 17), (24, 17), 2)
-        else:
-            self.image.fill(GREEN)
+        # Enemy sprite dimensions
+        ENEMY_WIDTH = 40
+        ENEMY_HEIGHT = 40
+        
+        # Load enemy sprite images from assets
+        try:
+            self.top_left_image = pygame.transform.scale(
+                pygame.image.load("assets/top_left.png").convert_alpha(),
+                (ENEMY_WIDTH, ENEMY_HEIGHT)
+            )
+            self.top_right_image = pygame.transform.scale(
+                pygame.image.load("assets/top_right.png").convert_alpha(),
+                (ENEMY_WIDTH, ENEMY_HEIGHT)
+            )
+            self.bottom_left_image = pygame.transform.scale(
+                pygame.image.load("assets/bottom_left.png").convert_alpha(),
+                (ENEMY_WIDTH, ENEMY_HEIGHT)
+            )
+            self.bottom_right_image = pygame.transform.scale(
+                pygame.image.load("assets/bottom_right.png").convert_alpha(),
+                (ENEMY_WIDTH, ENEMY_HEIGHT)
+            )
+            # Use top_left as default pose
+            self.image = self.top_left_image
+        except Exception as e:
+            # Fallback to drawn sprite if images not found
+            print(f"Warning: Could not load enemy images ({e}). Using fallback sprite.")
+            self.image = pygame.Surface((ENEMY_WIDTH, ENEMY_HEIGHT), pygame.SRCALPHA)
+            if USE_CYBERPUNK_THEME:
+                # Cyberpunk enemy: neon magenta with purple glow
+                pygame.draw.circle(self.image, NEON_MAGENTA, (20, 20), 15)
+                # Glow outline
+                pygame.draw.circle(self.image, NEON_PURPLE, (20, 20), 17, 2)
+                # Inner detail
+                pygame.draw.line(self.image, NEON_CYAN, (10, 20), (30, 20), 2)
+            else:
+                self.image.fill(GREEN)
         
         self.rect = self.image.get_rect(topleft=(x, y))
         self.vel_x = 2
@@ -211,45 +237,6 @@ class Enemy(pygame.sprite.Sprite):
         """Return a new enemy laser in a random direction towards player"""
         self.last_shoot_time = self.shoot_cooldown
         # Fire towards the player direction (randomly left or right)
-        direction = 1 if self.vel_x > 0 else -1
-        return EnemyLaser(self.rect.centerx, self.rect.centery, direction)
-    
-    def update(self):
-        self.rect.x += self.vel_x
-        if self.rect.left <= self.left_bound or self.rect.right >= self.right_bound:
-            self.vel_x *= -1
-        
-        # Decrement shoot cooldown
-        if self.last_shoot_time > 0:
-            self.last_shoot_time -= 1
-
-class Enemy(pygame.sprite.Sprite):
-    def __init__(self, x, y, left_bound, right_bound, can_shoot=False):
-        super().__init__()
-        self.image = pygame.Surface((35, 35), pygame.SRCALPHA)
-        # Cyberpunk enemy: neon magenta with purple glow
-        if USE_CYBERPUNK_THEME:
-            # Main body
-            pygame.draw.circle(self.image, NEON_MAGENTA, (17, 17), 15)
-            # Glow outline
-            pygame.draw.circle(self.image, NEON_PURPLE, (17, 17), 17, 2)
-            # Inner detail
-            pygame.draw.line(self.image, NEON_CYAN, (10, 17), (24, 17), 2)
-        else:
-            self.image.fill(GREEN)
-        
-        self.rect = self.image.get_rect(topleft=(x, y))
-        self.vel_x = 2
-        self.left_bound = left_bound
-        self.right_bound = right_bound
-        self.can_shoot = can_shoot  # Whether this enemy can shoot
-        self.last_shoot_time = 0  # Cooldown for shooting
-        self.shoot_cooldown = 120  # Frames between shots (2 seconds at 60 FPS)
-    
-    def shoot(self):
-        """Return a new enemy laser in direction it's facing"""
-        self.last_shoot_time = self.shoot_cooldown
-        # Fire towards the direction enemy is moving
         direction = 1 if self.vel_x > 0 else -1
         return EnemyLaser(self.rect.centerx, self.rect.centery, direction)
     
