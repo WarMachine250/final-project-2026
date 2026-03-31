@@ -194,11 +194,11 @@ class Enemy(pygame.sprite.Sprite):
         # Load enemy sprite images from assets
         try:
             self.left_image = pygame.transform.scale(
-                pygame.image.load("assets/bottom_left copy.png").convert_alpha(),
+                pygame.image.load("assets/left.png").convert_alpha(),
                 (ENEMY_WIDTH, ENEMY_HEIGHT)
             )
             self.right_image = pygame.transform.scale(
-                pygame.image.load("assets/bottom_right copy.png").convert_alpha(),
+                pygame.image.load("assets/right.png").convert_alpha(),
                 (ENEMY_WIDTH, ENEMY_HEIGHT)
             )
             # Use right as default pose
@@ -206,16 +206,22 @@ class Enemy(pygame.sprite.Sprite):
         except Exception as e:
             # Fallback to drawn sprite if images not found
             print(f"Warning: Could not load enemy images ({e}). Using fallback sprite.")
-            self.image = pygame.Surface((ENEMY_WIDTH, ENEMY_HEIGHT), pygame.SRCALPHA)
+            # Create fallback images
+            self.left_image = pygame.Surface((ENEMY_WIDTH, ENEMY_HEIGHT), pygame.SRCALPHA)
+            self.right_image = pygame.Surface((ENEMY_WIDTH, ENEMY_HEIGHT), pygame.SRCALPHA)
             if USE_CYBERPUNK_THEME:
                 # Cyberpunk enemy: neon magenta with purple glow
-                pygame.draw.circle(self.image, NEON_MAGENTA, (20, 20), 15)
-                # Glow outline
-                pygame.draw.circle(self.image, NEON_PURPLE, (20, 20), 17, 2)
-                # Inner detail
-                pygame.draw.line(self.image, NEON_CYAN, (10, 20), (30, 20), 2)
+                pygame.draw.circle(self.left_image, NEON_MAGENTA, (20, 20), 15)
+                pygame.draw.circle(self.left_image, NEON_PURPLE, (20, 20), 17, 2)
+                pygame.draw.line(self.left_image, NEON_CYAN, (10, 20), (30, 20), 2)
+                
+                pygame.draw.circle(self.right_image, NEON_MAGENTA, (20, 20), 15)
+                pygame.draw.circle(self.right_image, NEON_PURPLE, (20, 20), 17, 2)
+                pygame.draw.line(self.right_image, NEON_CYAN, (10, 20), (30, 20), 2)
             else:
-                self.image.fill(GREEN)
+                self.left_image.fill(GREEN)
+                self.right_image.fill(GREEN)
+            self.image = self.right_image
         
         self.rect = self.image.get_rect(topleft=(x, y))
         self.vel_x = 2
