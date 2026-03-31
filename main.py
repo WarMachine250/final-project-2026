@@ -235,10 +235,10 @@ class Enemy(pygame.sprite.Sprite):
     def update_sprite(self):
         """Update sprite image based on movement direction"""
         if self.vel_x > 0:
-            # Moving right - use right-facing image
-            self.image = self.right_image
+            # Moving right - use right image (may need flipping)
+            self.image = pygame.transform.flip(self.right_image, True, False)
         else:
-            # Moving left - use left-facing image
+            # Moving left - use left image
             self.image = self.left_image
     
     def update(self):
