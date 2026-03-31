@@ -194,11 +194,11 @@ class Enemy(pygame.sprite.Sprite):
         # Load enemy sprite images from assets
         try:
             self.left_image = pygame.transform.scale(
-                pygame.image.load("assets/left.png").convert_alpha(),
+                pygame.image.load("assets/bottom_left copy.png").convert_alpha(),
                 (ENEMY_WIDTH, ENEMY_HEIGHT)
             )
             self.right_image = pygame.transform.scale(
-                pygame.image.load("assets/right.png").convert_alpha(),
+                pygame.image.load("assets/bottom_right copy.png").convert_alpha(),
                 (ENEMY_WIDTH, ENEMY_HEIGHT)
             )
             # Use right as default pose
@@ -235,10 +235,10 @@ class Enemy(pygame.sprite.Sprite):
     def update_sprite(self):
         """Update sprite image based on movement direction"""
         if self.vel_x > 0:
-            # Moving right - use right image (may need flipping)
-            self.image = pygame.transform.flip(self.right_image, True, False)
+            # Moving right - use right-facing image
+            self.image = self.right_image
         else:
-            # Moving left - use left image
+            # Moving left - use left-facing image
             self.image = self.left_image
     
     def update(self):
