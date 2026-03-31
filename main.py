@@ -257,19 +257,38 @@ class Enemy(pygame.sprite.Sprite):
 class Boss(pygame.sprite.Sprite):
     def __init__(self, x, y, player=None):
         super().__init__()
-        self.image = pygame.Surface((80, 80), pygame.SRCALPHA)
-        # Cyberpunk boss: massive neon pink square with intense glow
-        if USE_CYBERPUNK_THEME:
-            # Main body - neon pink
-            pygame.draw.rect(self.image, NEON_PINK, (10, 10, 60, 60))
-            # Multiple glow borders for intense effect
-            pygame.draw.rect(self.image, NEON_MAGENTA, (10, 10, 60, 60), 3)
-            pygame.draw.rect(self.image, NEON_PURPLE, (5, 5, 70, 70), 2)
-            # Danger indicator X
-            pygame.draw.line(self.image, NEON_CYAN, (20, 20), (60, 60), 2)
-            pygame.draw.line(self.image, NEON_CYAN, (60, 20), (20, 60), 2)
-        else:
-            self.image.fill(PURPLE)
+        # Boss sprite dimensions
+        BOSS_WIDTH = 80
+        BOSS_HEIGHT = 80
+        
+        # Load boss sprite images from assets
+        try:
+            self.left_image = pygame.transform.scale(
+                pygame.image.load("assets/boss_left.png").convert_alpha(),
+                (BOSS_WIDTH, BOSS_HEIGHT)
+            )
+            self.right_image = pygame.transform.scale(
+                pygame.image.load("assets/boss_right.png").convert_alpha(),
+                (BOSS_WIDTH, BOSS_HEIGHT)
+            )
+            # Use right as default pose
+            self.image = self.right_image
+        except Exception as e:
+            # Fallback to drawn sprite if images not found
+            print(f"Warning: Could not load boss images ({e}). Using fallback sprite.")
+            self.image = pygame.Surface((BOSS_WIDTH, BOSS_HEIGHT), pygame.SRCALPHA)
+            if USE_CYBERPUNK_THEME:
+                # Cyberpunk boss: massive neon pink square with intense glow
+                # Main body - neon pink
+                pygame.draw.rect(self.image, NEON_PINK, (10, 10, 60, 60))
+                # Multiple glow borders for intense effect
+                pygame.draw.rect(self.image, NEON_MAGENTA, (10, 10, 60, 60), 3)
+                pygame.draw.rect(self.image, NEON_PURPLE, (5, 5, 70, 70), 2)
+                # Danger indicator X
+                pygame.draw.line(self.image, NEON_CYAN, (20, 20), (60, 60), 2)
+                pygame.draw.line(self.image, NEON_CYAN, (60, 20), (20, 60), 2)
+            else:
+                self.image.fill(PURPLE)
         
         self.rect = self.image.get_rect(topleft=(x, y))
         self.vel_x = 1  # Slower movement than regular enemies
@@ -298,11 +317,23 @@ class Boss(pygame.sprite.Sprite):
             return self.tracker_laser
         return None
     
+    def update_sprite(self):
+        """Update sprite image based on movement direction"""
+        if self.vel_x > 0:
+            # Moving right - use right-facing image
+            self.image = self.right_image
+        else:
+            # Moving left - use left-facing image
+            self.image = self.left_image
+    
     def update(self):
         # Patrol movement
         self.rect.x += self.vel_x
         if self.rect.left <= self.left_bound or self.rect.right >= self.right_bound:
             self.vel_x *= -1
+        
+        # Update sprite image based on direction
+        self.update_sprite()
         
         # Update or create tracking laser
         if self.player:
