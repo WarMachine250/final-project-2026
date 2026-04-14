@@ -725,19 +725,19 @@ class Game:
         # Extended enemies (some can shoot)
         # Position enemies on platforms (platform_y - 35 to sit on top)
         enemies_data = [
-            (275, 415, 200, 350, False),   # On platform at y=450
+            (275, 415, 200, 350, True),    # On platform at y=450
             (575, 365, 500, 650, True),    # On platform at y=400
-            (375, 265, 300, 450, False),   # On platform at y=300
+            (375, 265, 300, 450, True),    # On platform at y=300
             (675, 215, 600, 750, True),    # On platform at y=250
-            (975, 315, 900, 1050, False),  # On platform at y=350
+            (975, 315, 900, 1050, True),   # On platform at y=350
             (1275, 265, 1200, 1350, True), # On platform at y=300
-            (1575, 215, 1500, 1650, False),# On platform at y=250
+            (1575, 215, 1500, 1650, True), # On platform at y=250
             (1875, 315, 1800, 1950, True), # On platform at y=350
-            (2175, 265, 2100, 2250, False),# On platform at y=300
+            (2175, 265, 2100, 2250, True), # On platform at y=300
             (2475, 215, 2400, 2550, True), # On platform at y=250
-            (2775, 315, 2700, 2850, False),# On platform at y=350
+            (2775, 315, 2700, 2850, True), # On platform at y=350
             (3075, 265, 3000, 3150, True), # On platform at y=300
-            (3375, 215, 3300, 3450, False),# On platform at y=250
+            (3375, 215, 3300, 3450, True), # On platform at y=250
         ]
         
         for x, y, left, right, can_shoot in enemies_data:
@@ -802,21 +802,21 @@ class Game:
         # Position enemies on platforms (platform_y - 35 to sit on top)
         enemies_data = [
             (250, 415, 200, 300, True),    # On platform at y=450, can shoot
-            (400, 365, 350, 450, False),   # On platform at y=400
+            (400, 365, 350, 450, True),    # On platform at y=400
             (550, 315, 500, 600, True),    # On platform at y=350, can shoot
-            (700, 265, 650, 750, False),   # On platform at y=300
+            (700, 265, 650, 750, True),    # On platform at y=300
             (850, 365, 800, 900, True),    # On platform at y=400, can shoot
-            (1000, 315, 950, 1050, False), # On platform at y=350
+            (1000, 315, 950, 1050, True),  # On platform at y=350
             (1150, 265, 1100, 1200, True), # On platform at y=300, can shoot
-            (1300, 345, 1250, 1350, False),# On platform at y=380
+            (1300, 345, 1250, 1350, True), # On platform at y=380
             (1450, 285, 1400, 1500, True), # On platform at y=320, can shoot
-            (1600, 245, 1550, 1650, False),# On platform at y=280
+            (1600, 245, 1550, 1650, True), # On platform at y=280
             (1750, 325, 1700, 1800, True), # On platform at y=360, can shoot
-            (1900, 265, 1850, 1950, False),# On platform at y=300
+            (1900, 265, 1850, 1950, True), # On platform at y=300
             (2050, 215, 2000, 2100, True), # On platform at y=250, can shoot
-            (2200, 305, 2150, 2250, False),# On platform at y=340
+            (2200, 305, 2150, 2250, True), # On platform at y=340
             (2350, 255, 2300, 2400, True), # On platform at y=290, can shoot
-            (2500, 315, 2450, 2550, False),# On platform at y=350
+            (2500, 315, 2450, 2550, True), # On platform at y=350
             (2650, 265, 2600, 2700, True), # On platform at y=300, can shoot
             (2800, 225, 2750, 2850, False),# On platform at y=260
             (2950, 285, 2900, 3000, True), # On platform at y=320, can shoot
@@ -888,15 +888,15 @@ class Game:
         
         # Fewer enemies before boss
         enemies_data = [
-            (275, 415, 200, 350, False),   # On platform at y=450
+            (275, 415, 200, 350, True),    # On platform at y=450
             (525, 315, 450, 600, True),    # On platform at y=350
-            (775, 215, 700, 850, False),   # On platform at y=250
+            (775, 215, 700, 850, True),    # On platform at y=250
             (1025, 315, 950, 1100, True),  # On platform at y=350
-            (1275, 165, 1200, 1350, False),# On platform at y=200
+            (1275, 165, 1200, 1350, True), # On platform at y=200
             (1575, 315, 1500, 1650, True), # On platform at y=350
-            (1875, 215, 1800, 1950, False),# On platform at y=250
+            (1875, 215, 1800, 1950, True), # On platform at y=250
             (2175, 365, 2100, 2250, True), # On platform at y=400
-            (2475, 265, 2400, 2550, False),# On platform at y=300
+            (2475, 265, 2400, 2550, True), # On platform at y=300
             (2775, 165, 2700, 2850, True), # On platform at y=200
         ]
         
@@ -974,8 +974,8 @@ class Game:
         import random
         for enemy in self.enemies:
             if enemy.can_shoot and enemy.last_shoot_time <= 0:
-                # Randomly decide if enemy shoots this frame (~0.8% chance per frame)
-                if random.random() < 0.008:
+                # Randomly decide if enemy shoots this frame (~2% chance per frame for more frequent fire)
+                if random.random() < 0.02:
                     new_enemy_laser = enemy.shoot()
                     self.enemy_lasers.add(new_enemy_laser)
                     self.all_sprites.add(new_enemy_laser)
