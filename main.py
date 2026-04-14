@@ -2,8 +2,6 @@ import pygame
 import sys
 import math
 
-# test
-
 # Initialize Pygame
 pygame.init()
 
@@ -961,8 +959,8 @@ class Game:
         mouse_buttons = pygame.mouse.get_pressed()
         self.player.handle_input(keys, mouse_buttons)
         
-        # Handle laser firing with left mouse click
-        if mouse_buttons[0] and self.player.last_laser_time <= 0:  # Left mouse button (index 0)
+        # Handle laser firing with left mouse click OR spacebar (alternative)
+        if (mouse_buttons[0] or keys[pygame.K_LCTRL] or keys[pygame.K_RCTRL]) and self.player.last_laser_time <= 0:  # Left mouse button (index 0) or Ctrl key
             new_laser = self.player.fire_laser()
             self.lasers.add(new_laser)
             self.all_sprites.add(new_laser)
