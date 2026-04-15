@@ -1,9 +1,11 @@
 import pygame
 import sys
 import math
+import random
 
 # Initialize Pygame
 pygame.init()
+pygame.mixer.init()  # Initialize sound mixer
 
 # Constants
 SCREEN_WIDTH = 800
@@ -26,6 +28,7 @@ NEON_PURPLE = (180, 0, 255)    # Electric purple
 NEON_BLUE = (0, 150, 255)      # Electric blue
 NEON_GREEN = (0, 255, 100)     # Neon green
 NEON_PINK = (255, 0, 127)      # Hot pink
+NEON_RED = (255, 0, 50)        # Neon red
 
 # Glow and accent colors
 GLOW_INTENSITY = 2             # For multiple glow layers
@@ -42,6 +45,258 @@ BLUE = (0, 100, 255)
 GREEN = (0, 200, 0)
 YELLOW = (255, 255, 0)
 PURPLE = (200, 0, 200)
+
+# Space colors
+DEEP_SPACE = (10, 5, 20)       # Deep space background
+STAR_COLOR = (255, 255, 200)   # Warm star color
+ALIEN_GLOW_1 = (100, 255, 200) # Cyan alien bioluminescence
+ALIEN_GLOW_2 = (200, 100, 255) # Purple alien bioluminescence
+ROBOT_CHROME = (200, 200, 220) # Chrome robot color
+
+class Star:
+    """Static star in the background"""
+    def __init__(self, x, y, brightness=0.5):
+        self.x = x
+        self.y = y
+        self.brightness = brightness
+        self.max_brightness = brightness
+        self.twinkle_speed = random.uniform(0.01, 0.05)
+        self.twinkle_phase = random.uniform(0, 6.28)
+    
+    def update(self):
+        # Twinkling effect
+        self.twinkle_phase += self.twinkle_speed
+        self.brightness = self.max_brightness * (0.5 + 0.5 * math.sin(self.twinkle_phase))
+    
+    def draw(self, surface, camera_x):
+        size = max(1, int(self.brightness * 3))
+        color = tuple(int(c * self.brightness) for c in STAR_COLOR)
+        pygame.draw.circle(surface, color, (int(self.x - camera_x), int(self.y)), size)
+
+class Asteroid:
+    """Parallax asteroid in background"""
+    def __init__(self, x, y, depth=0.5):
+        self.x = x
+        self.y = y
+        self.depth = depth  # 0-1, lower = farther away, slower parallax
+        self.size = random.randint(3, 15)
+        self.rotation = random.uniform(0, 360)
+        self.rotation_speed = random.uniform(-2, 2)
+        self.color = (120 + int(depth * 80), 100, 140)
+    
+    def update(self):
+        self.rotation += self.rotation_speed
+    
+    def draw(self, surface, camera_x):
+        # Parallax: asteroids move slower based on depth
+        screen_x = self.x - camera_x * self.depth
+        
+        # Only draw if on screen
+        if -50 < screen_x < SCREEN_WIDTH + 50:
+            pygame.draw.circle(surface, self.color, (int(screen_x), int(self.y)), self.size)
+            # Add a small glow
+            pygame.draw.circle(surface, tuple(min(255, c + 50) for c in self.color), 
+                              (int(screen_x), int(self.y)), self.size, 1)
+
+class DistantExplosion:
+    """Distant spaceship explosion in background"""
+    def __init__(self, x, y, max_duration=60):
+        self.x = x
+        self.y = y
+        self.age = 0
+        self.max_duration = max_duration
+        self.size = random.randint(5, 15)
+        self.depth = random.uniform(0.3, 0.8)  # Parallax depth
+        self.color = random.choice([NEON_RED, NEON_MAGENTA, NEON_PINK])
+    
+    def update(self):
+        self.age += 1
+    
+    def is_alive(self):
+        return self.age < self.max_duration
+    
+    def draw(self, surface, camera_x):
+        progress = self.age / self.max_duration
+        
+        # Parallax effect
+        screen_x = self.x - camera_x * self.depth
+        
+        if -50 < screen_x < SCREEN_WIDTH + 50:
+            # Expanding explosion with fade
+            current_size = int(self.size * (1 + progress * 2))
+            alpha = int(255 * (1 - progress))
+            
+            # Main explosion glow
+            explosion_surface = pygame.Surface((current_size * 2, current_size * 2), pygame.SRCALPHA)
+            color_with_alpha = (*self.color, alpha)
+            pygame.draw.circle(explosion_surface, color_with_alpha, (current_size, current_size), current_size)
+            surface.blit(explosion_surface, (int(screen_x) - current_size, int(self.y) - current_size))
+            
+            # Secondary glow (dimmer, larger)
+            if current_size > 3:
+                pygame.draw.circle(explosion_surface, (*self.color, int(alpha * 0.5)), 
+                                  (current_size, current_size), int(current_size * 1.5), 2)
+
+class AlienShip:
+    """Distant alien organic ship with bioluminescent glow"""
+    def __init__(self, x, y, depth=0.5):
+        self.x = x
+        self.y = y
+        self.depth = depth
+        self.size = random.randint(15, 35)
+        self.glow_phase = random.uniform(0, 6.28)
+        self.glow_speed = random.uniform(0.02, 0.05)
+        self.bob_offset = 0
+        self.bob_speed = random.uniform(0.01, 0.03)
+        self.color1 = ALIEN_GLOW_1
+        self.color2 = ALIEN_GLOW_2
+    
+    def update(self):
+        self.glow_phase += self.glow_speed
+        self.bob_offset = math.sin(self.glow_phase * 0.5) * 5
+    
+    def draw(self, surface, camera_x):
+        screen_x = self.x - camera_x * self.depth
+        
+        if -50 < screen_x < SCREEN_WIDTH + 50:
+            screen_y = self.y + self.bob_offset
+            
+            # Glow intensity based on animation
+            glow_intensity = 0.5 + 0.5 * math.sin(self.glow_phase)
+            
+            # Organic curved ship shape
+            # Main body (oval) - clamp color values to 0-255
+            color1 = tuple(min(255, int(c * glow_intensity)) for c in self.color1)
+            pygame.draw.ellipse(surface, color1,
+                              (int(screen_x) - self.size, int(screen_y) - self.size // 2,
+                               self.size * 2, self.size))
+            
+            # Glowing veins/accents - clamp color values to 0-255
+            color2 = tuple(min(255, int(c * min(1.0, glow_intensity + 0.3))) for c in self.color2)
+            pygame.draw.ellipse(surface, color2,
+                              (int(screen_x) - self.size, int(screen_y) - self.size // 2,
+                               self.size * 2, self.size), 2)
+            
+            # Bright glow spots
+            spot_color = (255, 255, 100)
+            pygame.draw.circle(surface, spot_color, (int(screen_x) - self.size // 2, int(screen_y)), 3)
+            pygame.draw.circle(surface, spot_color, (int(screen_x) + self.size // 2, int(screen_y)), 2)
+
+class RobotWarship:
+    """Distant robot metallic warship"""
+    def __init__(self, x, y, depth=0.5):
+        self.x = x
+        self.y = y
+        self.depth = depth
+        self.size = random.randint(15, 35)
+        self.rotation = random.uniform(0, 360)
+        self.rotation_speed = random.uniform(-1, 1)
+    
+    def update(self):
+        self.rotation += self.rotation_speed
+    
+    def draw(self, surface, camera_x):
+        screen_x = self.x - camera_x * self.depth
+        
+        if -50 < screen_x < SCREEN_WIDTH + 50:
+            screen_y = self.y
+            
+            # Angular chrome warship shape (wedge/arrow pointing right)
+            points = [
+                (int(screen_x) + self.size, int(screen_y)),  # Tip
+                (int(screen_x) - self.size, int(screen_y) - self.size // 2),  # Top rear
+                (int(screen_x) - self.size, int(screen_y) + self.size // 2),  # Bottom rear
+            ]
+            pygame.draw.polygon(surface, ROBOT_CHROME, points)
+            pygame.draw.polygon(surface, (100, 100, 150), points, 2)  # Dark outline
+            
+            # Weapon ports (small circles)
+            pygame.draw.circle(surface, (255, 100, 50), (int(screen_x), int(screen_y) - self.size // 4), 2)
+            pygame.draw.circle(surface, (255, 100, 50), (int(screen_x), int(screen_y) + self.size // 4), 2)
+
+class SoundManager:
+    """Manages all game sounds and music"""
+    def __init__(self):
+        self.sounds = {}
+        self.music_playing = False
+        self.sound_enabled = True
+        self.music_enabled = True
+        self.volume = 0.7
+        
+        # Try to load sounds from assets folder
+        self.load_sounds()
+    
+    def load_sounds(self):
+        """Load all sound effects from assets folder"""
+        sound_files = {
+            'laser': 'assets/laser.wav',
+            'bullet': 'assets/bullet.wav',
+            'explosion': 'assets/explosion.wav',
+            'enemy_hit': 'assets/enemy_hit.wav',
+            'boss_hit': 'assets/boss_hit.wav',
+            'boss_defeated': 'assets/boss_defeated.wav',
+            'game_over': 'assets/game_over.wav',
+            'victory': 'assets/victory.wav',
+            'jump': 'assets/jump.wav',
+            'collect': 'assets/collect.wav',
+        }
+        
+        for sound_name, file_path in sound_files.items():
+            try:
+                sound = pygame.mixer.Sound(file_path)
+                sound.set_volume(self.volume)
+                self.sounds[sound_name] = sound
+            except Exception as e:
+                # Sound file not found - that's ok, we'll just skip it
+                pass
+    
+    def play_sound(self, sound_name):
+        """Play a sound effect"""
+        if not self.sound_enabled or sound_name not in self.sounds:
+            return
+        
+        try:
+            self.sounds[sound_name].play()
+        except Exception as e:
+            pass
+    
+    def play_music(self, file_path, loops=-1):
+        """Play background music (loops infinitely by default)"""
+        if not self.music_enabled:
+            return
+        
+        try:
+            pygame.mixer.music.load(file_path)
+            pygame.mixer.music.set_volume(self.volume * 0.8)  # Music slightly quieter
+            pygame.mixer.music.play(loops)
+            self.music_playing = True
+        except Exception as e:
+            pass
+    
+    def stop_music(self):
+        """Stop background music"""
+        if self.music_playing:
+            pygame.mixer.music.stop()
+            self.music_playing = False
+    
+    def set_volume(self, volume):
+        """Set volume (0.0 to 1.0)"""
+        self.volume = max(0.0, min(1.0, volume))
+        pygame.mixer.set_volume(self.volume)
+        
+        # Update all loaded sounds
+        for sound in self.sounds.values():
+            sound.set_volume(self.volume)
+    
+    def toggle_sound(self):
+        """Toggle sound effects on/off"""
+        self.sound_enabled = not self.sound_enabled
+    
+    def toggle_music(self):
+        """Toggle music on/off"""
+        self.music_enabled = not self.music_enabled
+        if not self.music_enabled:
+            self.stop_music()
 
 class Player(pygame.sprite.Sprite):
     def __init__(self, x, y):
@@ -90,6 +345,8 @@ class Player(pygame.sprite.Sprite):
         self.facing_right = True  # Track which direction player is facing
         self.last_laser_time = 0  # Cooldown for laser firing
         self.laser_cooldown = 30  # Frames between laser shots (0.5 seconds at 60 FPS)
+        self.last_bullet_time = 0  # Cooldown for bullet firing
+        self.bullet_cooldown = 15  # Frames between bullet shots (0.25 seconds at 60 FPS)
         # Animation state variables
         self.shooting_anim_time = 0  # Current frame of shooting animation
         self.shooting_anim_duration = 8  # Total frames for shooting animation
@@ -120,6 +377,14 @@ class Player(pygame.sprite.Sprite):
         direction = 1 if self.facing_right else -1
         return Laser(self.rect.centerx, self.rect.centery, direction)
     
+    def fire_bullet(self):
+        """Return a new bullet in the direction the player is facing"""
+        self.last_bullet_time = self.bullet_cooldown
+        self.shooting_anim_time = self.shooting_anim_duration  # Trigger shooting animation
+        # Fire from the center of the player
+        direction = 1 if self.facing_right else -1
+        return Bullet(self.rect.centerx, self.rect.centery, direction)
+    
     def apply_gravity(self):
         self.vel_y += GRAVITY
         if self.vel_y > 20:
@@ -132,6 +397,10 @@ class Player(pygame.sprite.Sprite):
         # Decrement laser cooldown
         if self.last_laser_time > 0:
             self.last_laser_time -= 1
+        
+        # Decrement bullet cooldown
+        if self.last_bullet_time > 0:
+            self.last_bullet_time -= 1
 
         # Decrement shooting animation counter
         if self.shooting_anim_time > 0:
@@ -268,6 +537,7 @@ class Boss(pygame.sprite.Sprite):
         BOSS_HEIGHT = 80
         
         # Load boss sprite images from assets
+        self.images_loaded = False
         try:
             self.left_image = pygame.transform.scale(
                 pygame.image.load("assets/boss_left.png").convert_alpha(),
@@ -279,35 +549,48 @@ class Boss(pygame.sprite.Sprite):
             )
             # Use right as default pose
             self.image = self.right_image
+            self.images_loaded = True
         except Exception as e:
             # Fallback to drawn sprite if images not found
             print(f"Warning: Could not load boss images ({e}). Using fallback sprite.")
-            self.image = pygame.Surface((BOSS_WIDTH, BOSS_HEIGHT), pygame.SRCALPHA)
+            self.left_image = pygame.Surface((BOSS_WIDTH, BOSS_HEIGHT), pygame.SRCALPHA)
+            self.right_image = pygame.Surface((BOSS_WIDTH, BOSS_HEIGHT), pygame.SRCALPHA)
             if USE_CYBERPUNK_THEME:
                 # Cyberpunk boss: massive neon pink square with intense glow
                 # Main body - neon pink
-                pygame.draw.rect(self.image, NEON_PINK, (10, 10, 60, 60))
+                pygame.draw.rect(self.left_image, NEON_PINK, (10, 10, 60, 60))
+                pygame.draw.rect(self.right_image, NEON_PINK, (10, 10, 60, 60))
                 # Multiple glow borders for intense effect
-                pygame.draw.rect(self.image, NEON_MAGENTA, (10, 10, 60, 60), 3)
-                pygame.draw.rect(self.image, NEON_PURPLE, (5, 5, 70, 70), 2)
+                pygame.draw.rect(self.left_image, NEON_MAGENTA, (10, 10, 60, 60), 3)
+                pygame.draw.rect(self.right_image, NEON_MAGENTA, (10, 10, 60, 60), 3)
+                pygame.draw.rect(self.left_image, NEON_PURPLE, (5, 5, 70, 70), 2)
+                pygame.draw.rect(self.right_image, NEON_PURPLE, (5, 5, 70, 70), 2)
                 # Danger indicator X
-                pygame.draw.line(self.image, NEON_CYAN, (20, 20), (60, 60), 2)
-                pygame.draw.line(self.image, NEON_CYAN, (60, 20), (20, 60), 2)
+                pygame.draw.line(self.left_image, NEON_CYAN, (20, 20), (60, 60), 2)
+                pygame.draw.line(self.left_image, NEON_CYAN, (60, 20), (20, 60), 2)
+                pygame.draw.line(self.right_image, NEON_CYAN, (20, 20), (60, 60), 2)
+                pygame.draw.line(self.right_image, NEON_CYAN, (60, 20), (20, 60), 2)
             else:
-                self.image.fill(PURPLE)
+                self.left_image.fill(PURPLE)
+                self.right_image.fill(PURPLE)
+            self.image = self.right_image
         
         self.rect = self.image.get_rect(topleft=(x, y))
-        self.vel_x = 1  # Slower movement than regular enemies
+        self.vel_x = 2  # Faster movement (was 1)
         self.vel_y = 0
-        self.left_bound = x - 200  # Boss patrol range (narrower)
-        self.right_bound = x + 200
-        self.health = 5  # Boss takes 5 hits to defeat
-        self.last_shoot_time = 0
-        self.shoot_cooldown = 60  # Shoots more frequently (1 second at 60 FPS)
+        self.left_bound = x - 300  # Wider patrol range
+        self.right_bound = x + 300
+        self.health = 15  # MUCH harder: 15 hits to defeat (was 5)
+        self.last_laser_time = 0
+        self.last_bullet_time = 0
+        self.laser_cooldown = 30  # Fires laser every 0.5 seconds (was 60)
+        self.bullet_cooldown = 40  # Fires bullets every ~0.67 seconds (NEW)
         self.hit_flash_time = 0  # Frames to flash red after being hit
         self.hit_flash_duration = 10  # Duration of red flash (10 frames)
         self.player = player  # Reference to player for tracking laser
         self.tracker_laser = None  # Will hold the tracking laser
+        self.attack_pattern = 0  # Attack pattern counter
+        self.game = None  # Reference to game for adding bullets
     
     def take_damage(self):
         """Called when hit by player laser"""
@@ -315,31 +598,59 @@ class Boss(pygame.sprite.Sprite):
         self.hit_flash_time = self.hit_flash_duration  # Trigger red flash
         return self.health <= 0  # Return True if boss is defeated
     
-    def shoot(self):
+    def shoot_laser(self):
         """Fire the tracking laser that was locked onto the player"""
-        self.last_shoot_time = self.shoot_cooldown
+        self.last_laser_time = self.laser_cooldown
         if self.tracker_laser and not self.tracker_laser.is_fired:
             self.tracker_laser.fire()
             return self.tracker_laser
         return None
     
-    def update_sprite(self):
-        """Update sprite image based on movement direction"""
+    def shoot_bullets(self):
+        """Fire bullets at the player from the boss - NEW ATTACK TYPE"""
+        self.last_bullet_time = self.bullet_cooldown
+        bullets = []
+        
+        # Calculate direction to player
+        if self.player:
+            dx = self.player.rect.centerx - self.rect.centerx
+            dy = self.player.rect.centery - self.rect.centery
+            dist = math.sqrt(dx*dx + dy*dy)
+            
+            if dist > 0:
+                # Normalize
+                dx /= dist
+                dy /= dist
+                
+                # Fire multiple bullets in a spread pattern for more challenge
+                for angle_offset in [-0.3, 0, 0.3]:  # 3 bullets in spread
+                    # Rotate direction by angle_offset
+                    new_dx = dx * math.cos(angle_offset) - dy * math.sin(angle_offset)
+                    new_dy = dx * math.sin(angle_offset) + dy * math.cos(angle_offset)
+                    
+                    bullet = BossBullet(
+                        self.rect.centerx,
+                        self.rect.centery,
+                        new_dx,
+                        new_dy
+                    )
+                    bullets.append(bullet)
+        
+        return bullets
+    
+    def update(self):
+        # Faster patrol movement
+        self.rect.x += self.vel_x
+        if self.rect.left <= self.left_bound or self.rect.right >= self.right_bound:
+            self.vel_x *= -1
+        
+        # Update sprite image based on direction (using loaded PNGs)
         if self.vel_x > 0:
             # Moving right - use right-facing image
             self.image = self.right_image
         else:
             # Moving left - use left-facing image
             self.image = self.left_image
-    
-    def update(self):
-        # Patrol movement
-        self.rect.x += self.vel_x
-        if self.rect.left <= self.left_bound or self.rect.right >= self.right_bound:
-            self.vel_x *= -1
-        
-        # Update sprite image based on direction
-        self.update_sprite()
         
         # Update or create tracking laser
         if self.player:
@@ -347,39 +658,24 @@ class Boss(pygame.sprite.Sprite):
                 # Create new tracking laser if none exists or previous one was fired
                 self.tracker_laser = TrackerLaser(self, self.player)
         
-        # Decrement shoot cooldown
-        if self.last_shoot_time > 0:
-            self.last_shoot_time -= 1
+        # Decrement shoot cooldowns
+        if self.last_laser_time > 0:
+            self.last_laser_time -= 1
+        if self.last_bullet_time > 0:
+            self.last_bullet_time -= 1
         
         # Decrement hit flash time
         if self.hit_flash_time > 0:
             self.hit_flash_time -= 1
         
-        # Redraw sprite with flash effect if hit
-        self.image = pygame.Surface((80, 80), pygame.SRCALPHA)
-        if self.hit_flash_time > 0:
-            # Flash red when hit
-            if USE_CYBERPUNK_THEME:
-                pygame.draw.rect(self.image, RED, (10, 10, 60, 60))  # Red fill
-                pygame.draw.rect(self.image, (255, 100, 100), (10, 10, 60, 60), 3)  # Light red border
-                pygame.draw.rect(self.image, (255, 150, 150), (5, 5, 70, 70), 2)  # Light red outer
-                pygame.draw.line(self.image, (255, 200, 200), (20, 20), (60, 60), 2)
-                pygame.draw.line(self.image, (255, 200, 200), (60, 20), (20, 60), 2)
-            else:
-                self.image.fill(RED)
-        else:
-            # Normal boss appearance
-            if USE_CYBERPUNK_THEME:
-                # Main body - neon pink
-                pygame.draw.rect(self.image, NEON_PINK, (10, 10, 60, 60))
-                # Multiple glow borders for intense effect
-                pygame.draw.rect(self.image, NEON_MAGENTA, (10, 10, 60, 60), 3)
-                pygame.draw.rect(self.image, NEON_PURPLE, (5, 5, 70, 70), 2)
-                # Danger indicator X
-                pygame.draw.line(self.image, NEON_CYAN, (20, 20), (60, 60), 2)
-                pygame.draw.line(self.image, NEON_CYAN, (60, 20), (20, 60), 2)
-            else:
-                self.image.fill(PURPLE)
+        # Apply red flash overlay if hit (only if images are loaded)
+        if self.images_loaded and self.hit_flash_time > 0:
+            # Create a red-tinted version of the sprite
+            flashed_image = self.image.copy()
+            red_overlay = pygame.Surface((80, 80), pygame.SRCALPHA)
+            red_overlay.fill((255, 0, 0, 100))  # Red with some transparency
+            flashed_image.blit(red_overlay, (0, 0))
+            self.image = flashed_image
 
 class Collectible(pygame.sprite.Sprite):
     def __init__(self, x, y):
@@ -453,6 +749,33 @@ class EnemyLaser(pygame.sprite.Sprite):
         
         # Remove laser if it goes off screen
         if self.rect.right < 0 or self.rect.left > SCREEN_WIDTH + 500:
+            self.kill()
+
+class Bullet(pygame.sprite.Sprite):
+    def __init__(self, x, y, direction=1):
+        super().__init__()
+        self.speed = 15  # Bullet speed (faster than laser)
+        self.direction = direction  # 1 for right, -1 for left
+        
+        # Create bullet visual (small round projectile)
+        self.image = pygame.Surface((8, 8), pygame.SRCALPHA)
+        if USE_CYBERPUNK_THEME:
+            # Neon yellow bullet with glow
+            pygame.draw.circle(self.image, NEON_GREEN, (4, 4), 4)
+            pygame.draw.circle(self.image, NEON_CYAN, (4, 4), 4, 1)  # Glow border
+        else:
+            # Classic yellow bullet
+            pygame.draw.circle(self.image, YELLOW, (4, 4), 4)
+            pygame.draw.circle(self.image, BLACK, (4, 4), 4, 1)  # Border
+        
+        self.rect = self.image.get_rect(center=(x, y))
+    
+    def update(self):
+        # Move bullet in the direction it was fired
+        self.rect.x += self.speed * self.direction
+        
+        # Remove bullet if it goes off screen or past level end
+        if self.rect.right < 0 or self.rect.left > 7000:
             self.kill()
 
 class TrackerLaser(pygame.sprite.Sprite):
@@ -553,6 +876,39 @@ class BossLaser(pygame.sprite.Sprite):
             self.kill()
 
 
+class BossBullet(pygame.sprite.Sprite):
+    """Boss bullet projectile - faster and more aggressive than regular bullets"""
+    def __init__(self, x, y, dx, dy):
+        super().__init__()
+        self.speed = 12  # Boss bullet speed (faster than player bullets)
+        self.dx = dx  # Direction x (normalized)
+        self.dy = dy  # Direction y (normalized)
+        
+        # Create boss bullet visual (large neon red bullet)
+        self.image = pygame.Surface((12, 12), pygame.SRCALPHA)
+        if USE_CYBERPUNK_THEME:
+            # Large neon red bullet with glow
+            pygame.draw.circle(self.image, (255, 50, 50), (6, 6), 6)  # Red core
+            pygame.draw.circle(self.image, NEON_MAGENTA, (6, 6), 6, 2)  # Magenta glow
+            pygame.draw.circle(self.image, (255, 100, 100), (6, 6), 5, 1)  # Extra glow
+        else:
+            # Classic red bullet
+            pygame.draw.circle(self.image, (200, 0, 0), (6, 6), 6)
+            pygame.draw.circle(self.image, BLACK, (6, 6), 6, 1)  # Border
+        
+        self.rect = self.image.get_rect(center=(x, y))
+    
+    def update(self):
+        # Move bullet in the calculated direction
+        self.rect.x += self.speed * self.dx
+        self.rect.y += self.speed * self.dy
+        
+        # Remove bullet if it goes off screen
+        if self.rect.right < 0 or self.rect.left > SCREEN_WIDTH + 500 or \
+           self.rect.bottom < 0 or self.rect.top > SCREEN_HEIGHT + 500:
+            self.kill()
+
+
 class Explosion(pygame.sprite.Sprite):
     def __init__(self, x, y, size=40, duration=15):
         super().__init__()
@@ -640,11 +996,22 @@ class Platform(pygame.sprite.Sprite):
 class Game:
     def __init__(self):
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-        pygame.display.set_caption("Cyberpunk Grid Platformer" if USE_CYBERPUNK_THEME else "Pygame Platformer")
+        pygame.display.set_caption("Alien vs Robots")
         self.clock = pygame.time.Clock()
         self.running = True
         self.score = 0
         self.level = 1
+        self.lives = 3
+        self.game_over = False
+        self.victory = False  # Track if player won vs lost
+        self.title_screen = True  # Start on title screen
+        
+        # Sound Manager
+        self.sound_manager = SoundManager()
+        
+        # Music playback state
+        self.music_playing = False
+        self.current_music = None
         
         # Cyberpunk theme fonts
         if USE_CYBERPUNK_THEME:
@@ -668,15 +1035,30 @@ class Game:
         # Animation counter for effects
         self.frame_count = 0
         
+        # Restart button (created in draw method, initialized here)
+        self.restart_button_rect = pygame.Rect(0, 0, 0, 0)
+        
+        # Start button (created in draw method, initialized here)
+        self.start_button_rect = pygame.Rect(0, 0, 0, 0)
+        
         # Sprite groups
         self.platforms = pygame.sprite.Group()
         self.enemies = pygame.sprite.Group()
         self.collectibles = pygame.sprite.Group()
         self.lasers = pygame.sprite.Group()  # NEW: Laser group
+        self.bullets = pygame.sprite.Group()  # NEW: Bullet group
         self.enemy_lasers = pygame.sprite.Group()  # NEW: Enemy laser group
         self.bosses = pygame.sprite.Group()  # NEW: Boss group
         self.explosions = pygame.sprite.Group()  # NEW: Explosion effects
         self.all_sprites = pygame.sprite.Group()
+        
+        # Background space elements
+        self.stars = []
+        self.asteroids = []
+        self.distant_explosions = []
+        self.alien_ships = []
+        self.robot_warships = []
+        self.initialize_background()
         
         # Create level
         self.create_level()
@@ -685,6 +1067,36 @@ class Game:
         self.player = Player(100, 100)
         self.all_sprites.add(self.player)
     
+    def initialize_background(self):
+        """Initialize background space elements"""
+        # Create stars scattered throughout
+        for _ in range(80):
+            x = random.randint(0, 7000)
+            y = random.randint(0, SCREEN_HEIGHT)
+            brightness = random.uniform(0.3, 1.0)
+            self.stars.append(Star(x, y, brightness))
+        
+        # Create asteroids at various depths
+        for _ in range(30):
+            x = random.randint(0, 7000)
+            y = random.randint(50, SCREEN_HEIGHT - 50)
+            depth = random.uniform(0.3, 0.9)
+            self.asteroids.append(Asteroid(x, y, depth))
+        
+        # Create distant alien ships
+        for _ in range(5):
+            x = random.randint(0, 7000)
+            y = random.randint(30, 150)
+            depth = random.uniform(0.4, 0.8)
+            self.alien_ships.append(AlienShip(x, y, depth))
+        
+        # Create distant robot warships
+        for _ in range(5):
+            x = random.randint(0, 7000)
+            y = random.randint(SCREEN_HEIGHT - 150, SCREEN_HEIGHT - 30)
+            depth = random.uniform(0.4, 0.8)
+            self.robot_warships.append(RobotWarship(x, y, depth))
+    
     def create_level(self):
         if self.level == 1:
             self.create_level_1()
@@ -692,15 +1104,18 @@ class Game:
             self.create_level_2()
         elif self.level == 3:
             self.create_level_3()
+        elif self.level == 4:
+            self.create_level_boss()
     
     def create_level_1(self):
-        # Ground - extended length
+        # Ground - extended length (not collidable - only platforms can be stood on)
         ground = Platform(0, SCREEN_HEIGHT - 40, 4000, 40)
-        self.platforms.add(ground)
-        self.all_sprites.add(ground)
+        # Don't add ground to collision platforms
+        self.all_sprites.add(ground)  # Still visible but not collidable
         
         # Extended platforms
         platforms_data = [
+            (50, 500, 150, 20),    # Starting platform near spawn point
             (200, 450, 150, 20),
             (500, 400, 150, 20),
             (300, 300, 150, 20),
@@ -758,13 +1173,14 @@ class Game:
             self.all_sprites.add(collectible)
     
     def create_level_2(self):
-        # Ground - even longer
+        # Ground - even longer (not collidable - only platforms can be stood on)
         ground = Platform(0, SCREEN_HEIGHT - 40, 5000, 40)
-        self.platforms.add(ground)
-        self.all_sprites.add(ground)
+        # Don't add ground to collision platforms
+        self.all_sprites.add(ground)  # Still visible but not collidable
         
         # More challenging platforms with smaller gaps
         platforms_data = [
+            (50, 500, 100, 20),    # Starting platform near spawn point
             (200, 450, 100, 20),
             (350, 400, 100, 20),
             (500, 350, 100, 20),
@@ -850,14 +1266,15 @@ class Game:
             self.all_sprites.add(collectible)
     
     def create_level_3(self):
-        """Final boss level - shorter but with intense boss challenge"""
-        # Ground
-        ground = Platform(0, SCREEN_HEIGHT - 40, 7000, 40)
-        self.platforms.add(ground)
-        self.all_sprites.add(ground)
+        """Level 3 - challenging platforming leading to boss level"""
+        # Ground (not collidable - only platforms can be stood on)
+        ground = Platform(0, SCREEN_HEIGHT - 40, 6000, 40)
+        # Don't add ground to collision platforms
+        self.all_sprites.add(ground)  # Still visible but not collidable
         
-        # Boss arena platforms - fewer but taller for tactical movement
+        # Challenging platforms
         platforms_data = [
+            (50, 500, 150, 20),    # Starting platform near spawn point
             (200, 450, 150, 20),
             (450, 350, 150, 20),
             (700, 250, 150, 20),
@@ -872,13 +1289,11 @@ class Game:
             (3300, 250, 150, 20),
             (3600, 400, 150, 20),
             (3900, 300, 150, 20),
-            (4200, 150, 150, 20),  # Challenging access to boss
+            (4200, 150, 150, 20),  # Challenging access to boss entrance
             (4500, 300, 150, 20),
             (4800, 200, 150, 20),
             (5100, 350, 150, 20),
             (5400, 300, 150, 20),
-            (5700, 200, 150, 20),
-            (5900, 450, 300, 20),  # Wide platform for boss battle
         ]
         
         for x, y, w, h in platforms_data:
@@ -886,18 +1301,57 @@ class Game:
             self.platforms.add(platform)
             self.all_sprites.add(platform)
         
-        # Fewer enemies before boss
+        # Enemies throughout the level - SIGNIFICANTLY INCREASED for more challenge
         enemies_data = [
+            # First section (200-600)
             (275, 415, 200, 350, True),    # On platform at y=450
+            (325, 415, 250, 400, False),   # Additional enemy nearby
             (525, 315, 450, 600, True),    # On platform at y=350
+            (575, 315, 480, 630, False),   # Additional enemy
+            
+            # Second section (600-1100)
             (775, 215, 700, 850, True),    # On platform at y=250
+            (825, 215, 730, 880, False),   # Additional enemy
             (1025, 315, 950, 1100, True),  # On platform at y=350
+            (975, 315, 920, 1050, False),  # Additional enemy
+            
+            # Third section (1100-1700)
             (1275, 165, 1200, 1350, True), # On platform at y=200
+            (1225, 165, 1150, 1300, False),# Additional enemy
             (1575, 315, 1500, 1650, True), # On platform at y=350
+            (1625, 315, 1540, 1700, False),# Additional enemy
+            
+            # Fourth section (1700-2300)
             (1875, 215, 1800, 1950, True), # On platform at y=250
+            (1825, 215, 1750, 1900, False),# Additional enemy
             (2175, 365, 2100, 2250, True), # On platform at y=400
+            (2225, 365, 2150, 2300, False),# Additional enemy
+            
+            # Fifth section (2300-2900)
             (2475, 265, 2400, 2550, True), # On platform at y=300
+            (2525, 265, 2450, 2600, False),# Additional enemy
             (2775, 165, 2700, 2850, True), # On platform at y=200
+            (2725, 165, 2650, 2800, False),# Additional enemy
+            
+            # Sixth section (3000-3900) - NEW
+            (3075, 315, 3000, 3150, True), # On platform at y=350
+            (3125, 315, 3050, 3200, False),# Additional enemy
+            (3375, 215, 3300, 3450, True), # On platform at y=250
+            (3425, 215, 3350, 3500, False),# Additional enemy
+            
+            # Seventh section (3900-4800) - NEW
+            (3975, 365, 3900, 4050, True), # On platform at y=400
+            (4025, 365, 3950, 4100, False),# Additional enemy
+            (4275, 115, 4200, 4350, True), # On platform at y=150 (challenging)
+            (4325, 115, 4250, 4400, False),# Additional enemy
+            
+            # Final section (4800-5400) - NEW - INTENSE
+            (4575, 265, 4500, 4650, True), # On platform at y=300
+            (4625, 265, 4550, 4700, False),# Additional enemy
+            (4875, 165, 4800, 4950, True), # On platform at y=200
+            (4925, 165, 4850, 5000, False),# Additional enemy
+            (5175, 315, 5100, 5250, True), # On platform at y=350
+            (5225, 315, 5150, 5300, False),# Additional enemy
         ]
         
         for x, y, left, right, can_shoot in enemies_data:
@@ -905,18 +1359,54 @@ class Game:
             self.enemies.add(enemy)
             self.all_sprites.add(enemy)
         
-        # Boss at the end (on the wide platform)
-        boss = Boss(5950, 370, player=self.player)  # 370 = 450 - 80 (platform_y - boss_height)
-        self.bosses.add(boss)
-        self.all_sprites.add(boss)
-        
-        # Fewer collectibles, more spread out
+        # Collectibles
         collectibles_data = [
             (200, 430), (450, 330), (700, 230), (950, 330),
             (1200, 180), (1500, 330), (1800, 230), (2100, 380),
             (2400, 280), (2700, 180), (3000, 330), (3300, 230),
             (3600, 380), (3900, 280), (4200, 130), (4500, 280),
-            (4800, 180), (5100, 330), (5400, 280), (5700, 180)
+            (4800, 180), (5100, 330), (5400, 280)
+        ]
+        for cx, cy in collectibles_data:
+            collectible = Collectible(cx, cy)
+            self.collectibles.add(collectible)
+            self.all_sprites.add(collectible)
+    
+    def create_level_boss(self):
+        """Boss Arena - dedicated boss battle level"""
+        # Ground (not collidable - only platforms can be stood on)
+        ground = Platform(0, SCREEN_HEIGHT - 40, 2000, 40)
+        # Don't add ground to collision platforms
+        self.all_sprites.add(ground)  # Still visible but not collidable
+        
+        # Boss arena platforms - designed for tactical boss battle
+        platforms_data = [
+            (50, 500, 150, 20),     # Starting platform
+            (250, 450, 150, 20),    # Left side lower
+            (500, 350, 150, 20),    # Left-center middle
+            (750, 250, 150, 20),    # Left-center high
+            (1000, 350, 150, 20),   # Center
+            (1250, 450, 150, 20),   # Center lower
+            (1500, 350, 150, 20),   # Right-center middle
+            (1750, 250, 150, 20),   # Right side high
+            (1350, 500, 400, 20),   # Wide arena platform for boss
+        ]
+        
+        for x, y, w, h in platforms_data:
+            platform = Platform(x, y, w, h)
+            self.platforms.add(platform)
+            self.all_sprites.add(platform)
+        
+        # No regular enemies in boss arena - just the boss
+        # Boss at the center of the arena
+        boss = Boss(1550, 370, player=self.player)  # 370 = 500 - 130 (arena platform_y - safe distance)
+        self.bosses.add(boss)
+        self.all_sprites.add(boss)
+        
+        # Some collectibles scattered around the arena for combat
+        collectibles_data = [
+            (250, 430), (500, 330), (750, 230),
+            (1000, 330), (1250, 430), (1500, 330), (1750, 230)
         ]
         for cx, cy in collectibles_data:
             collectible = Collectible(cx, cy)
@@ -932,6 +1422,100 @@ class Game:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
+            elif event.type == pygame.MOUSEBUTTONDOWN and self.title_screen:
+                # Check if start button was clicked
+                mouse_pos = pygame.mouse.get_pos()
+                if self.start_button_rect.collidepoint(mouse_pos):
+                    self.start_game()
+            elif event.type == pygame.MOUSEBUTTONDOWN and self.game_over:
+                # Check if restart button was clicked
+                mouse_pos = pygame.mouse.get_pos()
+                if self.restart_button_rect.collidepoint(mouse_pos):
+                    self.restart_game()
+            elif event.type == pygame.KEYDOWN:
+                if self.title_screen and event.key == pygame.K_s:
+                    # Press S to start game
+                    self.start_game()
+                elif self.game_over and event.key == pygame.K_r:
+                    # Press R to restart
+                    self.restart_game()
+    
+    def start_game(self):
+        """Start the game from title screen"""
+        self.title_screen = False
+        self.score = 0
+        self.level = 1
+        self.lives = 3
+        self.game_over = False
+        self.victory = False
+        self.camera_x = 0
+        
+        # Stop menu music and play battle music
+        pygame.mixer.music.stop()
+        self.play_level_music()
+        
+        # Clear all sprite groups
+        self.platforms.empty()
+        self.enemies.empty()
+        self.collectibles.empty()
+        self.lasers.empty()
+        self.bullets.empty()
+        self.enemy_lasers.empty()
+        self.bosses.empty()
+        self.all_sprites.empty()
+        
+        # Create player
+        self.player = Player(100, 100)
+        self.all_sprites.add(self.player)
+        
+        # Create level
+        self.create_level()
+    
+    def play_level_music(self):
+        """Play appropriate music based on current level"""
+        try:
+            if self.level == 4:
+                # Boss level gets epic boss music
+                if self.current_music != "boss":
+                    pygame.mixer.music.load('assets/boss_music.wav')
+                    pygame.mixer.music.play(-1)  # Loop indefinitely
+                    self.current_music = "boss"
+            else:
+                # Regular levels get battle music
+                if self.current_music != "battle":
+                    pygame.mixer.music.load('assets/battle_music.wav')
+                    pygame.mixer.music.play(-1)  # Loop indefinitely
+                    self.current_music = "battle"
+        except pygame.error as e:
+            print(f"Could not load music: {e}")
+        except Exception as e:
+            print(f"Music error: {e}")
+    
+    def restart_game(self):
+        """Restart the current level (keep same level, reset lives and enemies)"""
+        # Clear all sprites
+        self.platforms.empty()
+        self.enemies.empty()
+        self.collectibles.empty()
+        self.lasers.empty()
+        self.bullets.empty()
+        self.enemy_lasers.empty()
+        self.bosses.empty()
+        self.all_sprites.empty()
+        
+        # Reset game state (keep current level, reset score and lives)
+        self.score = 0
+        self.lives = 3
+        self.game_over = False
+        self.victory = False
+        self.camera_x = 0
+        
+        # Create player
+        self.player = Player(100, 100)
+        self.all_sprites.add(self.player)
+        
+        # Recreate the same level
+        self.create_level()
     
     def load_next_level(self):
         # Clear all sprites
@@ -939,6 +1523,7 @@ class Game:
         self.enemies.empty()
         self.collectibles.empty()
         self.lasers.empty()  # Clear lasers
+        self.bullets.empty()  # Clear bullets
         self.enemy_lasers.empty()  # Clear enemy lasers
         self.bosses.empty()  # Clear bosses
         self.all_sprites.empty()
@@ -950,6 +1535,9 @@ class Game:
         self.player.vel_y = 0
         self.player.vel_x = 0
         
+        # Play music for new level
+        self.play_level_music()
+        
         # Create new level
         self.create_level()
         self.all_sprites.add(self.player)
@@ -959,19 +1547,48 @@ class Game:
         mouse_buttons = pygame.mouse.get_pressed()
         self.player.handle_input(keys, mouse_buttons)
         
-        # Handle laser firing with left mouse click OR spacebar (alternative)
-        if (mouse_buttons[0] or keys[pygame.K_LCTRL] or keys[pygame.K_RCTRL]) and self.player.last_laser_time <= 0:  # Left mouse button (index 0) or Ctrl key
+        # Update background elements
+        for star in self.stars:
+            star.update()
+        for asteroid in self.asteroids:
+            asteroid.update()
+        for alien_ship in self.alien_ships:
+            alien_ship.update()
+        for robot_ship in self.robot_warships:
+            robot_ship.update()
+        
+        # Randomly spawn distant explosions
+        if random.random() < 0.01:  # 1% chance per frame
+            explosion = DistantExplosion(random.randint(0, 7000), random.randint(30, 200))
+            self.distant_explosions.append(explosion)
+        
+        # Update and clean up distant explosions
+        for explosion in self.distant_explosions[:]:
+            explosion.update()
+            if not explosion.is_alive():
+                self.distant_explosions.remove(explosion)
+        
+        # Handle laser firing with left mouse click OR Ctrl key
+        if (mouse_buttons[0] or keys[pygame.K_LCTRL] or keys[pygame.K_RCTRL]) and self.player.last_laser_time <= 0:
             new_laser = self.player.fire_laser()
             self.lasers.add(new_laser)
             self.all_sprites.add(new_laser)
+            self.sound_manager.play_sound('laser')
+        
+        # Handle bullet firing with right mouse click OR E key
+        if (mouse_buttons[2] or keys[pygame.K_e]) and self.player.last_bullet_time <= 0:  # Right mouse button (index 2) or E key
+            new_bullet = self.player.fire_bullet()
+            self.bullets.add(new_bullet)
+            self.all_sprites.add(new_bullet)
+            self.sound_manager.play_sound('bullet')
         
         self.player.update(self.platforms)
         self.player.redraw()  # Update shooting animation
         self.enemies.update()
         self.explosions.update()  # Update explosion animations
+        self.bullets.update()  # Update bullets
         
         # Handle enemy shooting
-        import random
         for enemy in self.enemies:
             if enemy.can_shoot and enemy.last_shoot_time <= 0:
                 # Randomly decide if enemy shoots this frame (~2% chance per frame for more frequent fire)
@@ -980,17 +1597,27 @@ class Game:
                     self.enemy_lasers.add(new_enemy_laser)
                     self.all_sprites.add(new_enemy_laser)
         
-        # Handle boss shooting (more aggressive)
+        # Handle boss shooting (more aggressive with multiple attack types)
         for boss in self.bosses:
             # Update tracking laser in Game loop
             if boss.tracker_laser:
                 boss.tracker_laser.update()
             
-            if boss.last_shoot_time <= 0:
-                # Boss shoots more frequently (~3% chance per frame)
-                if random.random() < 0.03:
-                    new_boss_laser = boss.shoot()
+            # Boss shoots lasers frequently
+            if boss.last_laser_time <= 0:
+                # Boss shoots laser more frequently (~5% chance per frame, was 3%)
+                if random.random() < 0.05:
+                    new_boss_laser = boss.shoot_laser()
                     # Don't add TrackerLaser to sprite groups - it uses custom drawing
+            
+            # Boss also shoots bullets at the player (NEW - MUCH HARDER!)
+            if boss.last_bullet_time <= 0:
+                # Boss shoots bullets frequently (~4% chance per frame)
+                if random.random() < 0.04:
+                    new_bullets = boss.shoot_bullets()
+                    for bullet in new_bullets:
+                        self.enemy_lasers.add(bullet)  # Add to enemy lasers group for collision
+                        self.all_sprites.add(bullet)
         
         self.collectibles.update()  # Update collectible animations
         self.lasers.update()  # Update lasers
@@ -1001,17 +1628,26 @@ class Game:
         
         # Check if player reached end of level (or defeated boss)
         if self.level == 3:
-            # Level 3: Check if boss is defeated
-            if len(self.bosses) == 0:
+            # Level 3: Check if player reached the end
+            if self.player.rect.x > 5400 - 50:
                 self.load_next_level()
+        elif self.level == 4:
+            # Level 4 (Boss): Check if boss is defeated
+            if len(self.bosses) == 0:
+                # Boss defeated - game complete!
+                self.victory = True
+                self.game_over = True  # Show victory screen
+                self.sound_manager.play_sound('victory')
         else:
             # Levels 1-2: Check if player reached end
-            level_end_x = 4000 if self.level == 1 else 5000
+            level_end_x = 3600 if self.level == 1 else 4000 if self.level == 2 else 5400
             if self.player.rect.x > level_end_x - 50:
                 self.load_next_level()
         
         # Collect items
         collected = pygame.sprite.spritecollide(self.player, self.collectibles, True)
+        for _ in collected:
+            self.sound_manager.play_sound('collect')
         self.score += len(collected) * 10
         
         # Laser collisions with enemies
@@ -1024,6 +1660,7 @@ class Game:
                 enemy.kill()
                 laser.kill()
                 self.score += 50  # Score for laser kill
+                self.sound_manager.play_sound('enemy_hit')
             
             # Laser collisions with boss
             bosses_hit = pygame.sprite.spritecollide(laser, self.bosses, False)
@@ -1038,8 +1675,10 @@ class Game:
                     self.explosions.add(big_explosion)
                     boss.kill()
                     self.score += 500  # Massive score for defeating boss
+                    self.sound_manager.play_sound('boss_defeated')
                 else:
                     self.score += 100  # Score for each hit on boss
+                    self.sound_manager.play_sound('boss_hit')
         
         # Enemy laser collisions with player - damage
         enemy_lasers_hit = pygame.sprite.spritecollide(self.player, self.enemy_lasers, True)
@@ -1052,10 +1691,44 @@ class Game:
                     boss.tracker_laser.kill()
         
         if enemy_lasers_hit:
-            # Player hit by enemy laser - reset
-            self.player.rect.topleft = (100, 100)
-            self.camera_x = 0
-            self.score = 0
+            # Player hit by enemy laser - lose a life
+            self.lives -= 1
+            if self.lives <= 0:
+                self.game_over = True
+                self.sound_manager.play_sound('game_over')
+            else:
+                self.player.rect.topleft = (100, 100)
+                self.camera_x = 0
+        
+        # Bullet collisions with enemies
+        for bullet in self.bullets:
+            enemies_hit = pygame.sprite.spritecollide(bullet, self.enemies, False)
+            for enemy in enemies_hit:
+                # Create explosion at enemy position
+                explosion = Explosion(enemy.rect.centerx, enemy.rect.centery, size=50, duration=15)
+                self.explosions.add(explosion)
+                enemy.kill()
+                bullet.kill()
+                self.score += 75  # Score for bullet kill (more than laser)
+                self.sound_manager.play_sound('enemy_hit')
+            
+            # Bullet collisions with boss
+            bosses_hit = pygame.sprite.spritecollide(bullet, self.bosses, False)
+            for boss in bosses_hit:
+                # Create explosion at boss hit location
+                explosion = Explosion(boss.rect.centerx, boss.rect.centery, size=70, duration=20)
+                self.explosions.add(explosion)
+                bullet.kill()
+                if boss.take_damage():
+                    # Boss defeated - larger explosion
+                    big_explosion = Explosion(boss.rect.centerx, boss.rect.centery, size=100, duration=25)
+                    self.explosions.add(big_explosion)
+                    boss.kill()
+                    self.score += 500  # Massive score for defeating boss
+                    self.sound_manager.play_sound('boss_defeated')
+                else:
+                    self.score += 150  # Score for each hit on boss with bullet (more than laser)
+                    self.sound_manager.play_sound('boss_hit')
         
         # Enemy collision - kill by jumping on them or with lasers
         enemies_hit = pygame.sprite.spritecollide(self.player, self.enemies, False)
@@ -1069,18 +1742,24 @@ class Game:
                 self.player.vel_y = -JUMP_STRENGTH
                 self.score += 50
             else:
-                # Player hit enemy from side or below - reset
-                self.player.rect.topleft = (100, 100)
-                self.camera_x = 0
-                self.score = 0
+                # Player hit enemy from side or below - lose a life
+                self.lives -= 1
+                if self.lives <= 0:
+                    self.game_over = True
+                else:
+                    self.player.rect.topleft = (100, 100)
+                    self.camera_x = 0
         
         # Boss collision - cannot be jumped on, touching boss resets player
         bosses_hit = pygame.sprite.spritecollide(self.player, self.bosses, False)
         if bosses_hit:
-            # Player hit boss - reset
-            self.player.rect.topleft = (100, 100)
-            self.camera_x = 0
-            self.score = 0
+            # Player hit boss - lose a life
+            self.lives -= 1
+            if self.lives <= 0:
+                self.game_over = True
+            else:
+                self.player.rect.topleft = (100, 100)
+                self.camera_x = 0
     
     def draw_grid_background(self):
         """Draw animated grid background for cyberpunk theme"""
@@ -1129,13 +1808,179 @@ class Game:
         # Draw text
         self.screen.blit(rendered_text, (x, y))
     
-    def draw(self):
-        # Cyberpunk dark background
+    def draw_title_screen(self):
+        """Draw the title screen with game name, start button, and credits"""
+        # Background
         if USE_CYBERPUNK_THEME:
             self.screen.fill(BG_DARK)
             self.draw_grid_background()
         else:
             self.screen.fill(WHITE)
+        
+        # Game title
+        if USE_CYBERPUNK_THEME:
+            title_text = self.font_large.render("ALIEN vs ROBOTS", True, NEON_CYAN)
+            title_color = NEON_CYAN
+            start_color = NEON_GREEN
+            start_bg = (0, 50, 0)
+            credits_color = NEON_MAGENTA
+        else:
+            title_text = self.font_large.render("ALIEN vs ROBOTS", True, BLUE)
+            title_color = BLUE
+            start_color = GREEN
+            start_bg = (200, 200, 200)
+            credits_color = (200, 0, 200)
+        
+        # Title position
+        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 100))
+        self.screen.blit(title_text, title_rect)
+        
+        # Start button
+        start_text = self.font_medium.render("START", True, start_color)
+        self.start_button_rect = start_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+        self.start_button_rect.inflate_ip(40, 20)  # Add padding
+        
+        pygame.draw.rect(self.screen, start_bg, self.start_button_rect)
+        pygame.draw.rect(self.screen, start_color, self.start_button_rect, 2)  # Border
+        self.screen.blit(start_text, start_text.get_rect(center=self.start_button_rect.center))
+        
+        # Instructions
+        if USE_CYBERPUNK_THEME:
+            instructions_color = NEON_BLUE
+        else:
+            instructions_color = BLUE
+        
+        instructions_text = self.font_small.render("Press S or Click to Start", True, instructions_color)
+        instructions_rect = instructions_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 80))
+        self.screen.blit(instructions_text, instructions_rect)
+        
+        # Credits
+        credits_text = self.font_small.render("By Ethan Harp", True, credits_color)
+        credits_rect = credits_text.get_rect(bottomright=(SCREEN_WIDTH - 20, SCREEN_HEIGHT - 20))
+        self.screen.blit(credits_text, credits_rect)
+    
+    def draw_victory_screen(self):
+        """Draw the victory screen when boss is defeated"""
+        # Semi-transparent overlay
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        overlay.set_alpha(200)
+        overlay.fill((0, 0, 0))
+        self.screen.blit(overlay, (0, 0))
+        
+        # Victory text
+        if USE_CYBERPUNK_THEME:
+            victory_text = self.font_large.render("VICTORY!", True, NEON_GREEN)
+            completion_text = self.font_medium.render("YOU DEFEATED THE BOSS!", True, NEON_CYAN)
+            final_score_text = self.font_medium.render(f"Final Score: {self.score}", True, NEON_CYAN)
+            restart_text = self.font_medium.render("CONTINUE", True, NEON_GREEN)
+            restart_color = NEON_GREEN
+            restart_bg = (0, 50, 0)
+        else:
+            victory_text = self.font_large.render("VICTORY!", True, GREEN)
+            completion_text = self.font_medium.render("YOU DEFEATED THE BOSS!", True, BLUE)
+            final_score_text = self.font_medium.render(f"Final Score: {self.score}", True, BLACK)
+            restart_text = self.font_medium.render("CONTINUE", True, GREEN)
+            restart_color = GREEN
+            restart_bg = (200, 200, 200)
+        
+        victory_rect = victory_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 80))
+        completion_rect = completion_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 20))
+        final_score_rect = final_score_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 40))
+        
+        # Continue button
+        self.restart_button_rect = restart_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 120))
+        self.restart_button_rect.inflate_ip(40, 20)  # Add padding around button
+        
+        # Draw button background
+        pygame.draw.rect(self.screen, restart_bg, self.restart_button_rect)
+        pygame.draw.rect(self.screen, restart_color, self.restart_button_rect, 2)  # Button border
+        
+        # Draw text
+        self.screen.blit(victory_text, victory_rect)
+        self.screen.blit(completion_text, completion_rect)
+        self.screen.blit(final_score_text, final_score_rect)
+        self.screen.blit(restart_text, restart_text.get_rect(center=self.restart_button_rect.center))
+    
+    def draw_game_over_screen(self):
+        """Draw the game over screen when player loses all lives"""
+        # Semi-transparent overlay
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        overlay.set_alpha(200)
+        overlay.fill((0, 0, 0))
+        self.screen.blit(overlay, (0, 0))
+        
+        # Game over text
+        if USE_CYBERPUNK_THEME:
+            game_over_text = self.font_large.render("GAME OVER", True, NEON_RED)
+            final_score_text = self.font_medium.render(f"Final Score: {self.score}", True, NEON_CYAN)
+            restart_text = self.font_medium.render("RESTART", True, NEON_GREEN)
+            restart_color = NEON_GREEN
+            restart_bg = (0, 50, 0)
+        else:
+            game_over_text = self.font_large.render("GAME OVER", True, RED)
+            final_score_text = self.font_medium.render(f"Final Score: {self.score}", True, BLACK)
+            restart_text = self.font_medium.render("RESTART", True, GREEN)
+            restart_color = GREEN
+            restart_bg = (200, 200, 200)
+        
+        game_over_rect = game_over_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50))
+        final_score_rect = final_score_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 50))
+        
+        # Restart button
+        self.restart_button_rect = restart_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 130))
+        self.restart_button_rect.inflate_ip(40, 20)  # Add padding around button
+        
+        # Draw button background
+        pygame.draw.rect(self.screen, restart_bg, self.restart_button_rect)
+        pygame.draw.rect(self.screen, restart_color, self.restart_button_rect, 2)  # Button border
+        
+        # Draw text
+        self.screen.blit(game_over_text, game_over_rect)
+        self.screen.blit(final_score_text, final_score_rect)
+        self.screen.blit(restart_text, restart_text.get_rect(center=self.restart_button_rect.center))
+    
+    def draw(self):
+        # Draw title screen
+        if self.title_screen:
+            # Play title screen music (once)
+            if self.current_music != "menu":
+                try:
+                    pygame.mixer.music.load('assets/menu_music.wav')
+                    pygame.mixer.music.play(-1)  # Loop indefinitely
+                    self.current_music = "menu"
+                except:
+                    pass  # Continue without music if file missing
+            self.draw_title_screen()
+            pygame.display.flip()
+            return
+        
+        # Space background with deep colors
+        self.screen.fill(DEEP_SPACE)
+        
+        # Draw background space elements
+        # Draw distant explosions first (farthest back)
+        for explosion in self.distant_explosions:
+            explosion.draw(self.screen, self.camera_x)
+        
+        # Draw asteroids
+        for asteroid in self.asteroids:
+            asteroid.draw(self.screen, self.camera_x)
+        
+        # Draw distant alien ships
+        for alien_ship in self.alien_ships:
+            alien_ship.draw(self.screen, self.camera_x)
+        
+        # Draw distant robot warships
+        for robot_ship in self.robot_warships:
+            robot_ship.draw(self.screen, self.camera_x)
+        
+        # Draw stars (foreground)
+        for star in self.stars:
+            star.draw(self.screen, self.camera_x)
+        
+        # Draw grid if cyberpunk theme enabled
+        if USE_CYBERPUNK_THEME:
+            self.draw_grid_background()
         
         # Draw sprites with camera offset
         for sprite in self.all_sprites:
@@ -1171,11 +2016,24 @@ class Game:
             pygame.draw.rect(self.screen, (50, 0, 50), level_glow_rect)  # Subtle background
             pygame.draw.rect(self.screen, NEON_MAGENTA, level_glow_rect, 2)  # Border glow
             self.screen.blit(level_surface, level_rect)
+            
+            # Draw lives panel
+            lives_text = f"LIVES: {self.lives}"
+            lives_surface = self.font_medium.render(lives_text, True, NEON_GREEN)
+            lives_rect = lives_surface.get_rect(topleft=(15, 60))
+            
+            # Glow effect for lives
+            lives_glow_rect = lives_rect.inflate(20, 10)
+            pygame.draw.rect(self.screen, (0, 50, 0), lives_glow_rect)  # Subtle background
+            pygame.draw.rect(self.screen, NEON_GREEN, lives_glow_rect, 2)  # Border glow
+            self.screen.blit(lives_surface, lives_rect)
         else:
             score_text = self.font_medium.render(f"Score: {self.score}", True, BLACK)
             level_text = self.font_medium.render(f"Level: {self.level}", True, BLACK)
+            lives_text = self.font_medium.render(f"Lives: {self.lives}", True, BLACK)
             self.screen.blit(score_text, (10, 10))
             self.screen.blit(level_text, (10, 50))
+            self.screen.blit(lives_text, (10, 90))
         
         # Draw boss health bar if boss exists
         if len(self.bosses) > 0:
@@ -1233,13 +2091,30 @@ class Game:
             if boss.tracker_laser:
                 boss.tracker_laser.draw(self.screen, self.camera_x)
         
+        # Draw game over or victory screen
+        if self.game_over:
+            if self.victory:
+                self.draw_victory_screen()
+            else:
+                self.draw_game_over_screen()
+        
         pygame.display.flip()
     
     def run(self):
         while self.running:
-            self.handle_events()
-            self.update()
-            self.draw()
+            if self.title_screen:
+                # Show title screen
+                self.handle_events()
+                self.draw()
+            elif self.game_over:
+                # Show victory or game over screen
+                self.handle_events()  # Check for continue/restart button click
+                self.draw()
+            else:
+                self.handle_events()
+                self.update()
+                self.draw()
+            
             self.clock.tick(FPS)
         
         pygame.quit()
